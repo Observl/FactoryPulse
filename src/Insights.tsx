@@ -41,10 +41,12 @@ export function EquipmentInsights({data}:{data:Overview}) {
 }
 
 export function RiskInsights({devices}:{devices:Device[]}) {
+ const [focused,setFocused]=useState("");
  const ranked=[...devices].sort((a,b)=>Number(b.risk_score)-Number(a.risk_score));
  const high=ranked.filter(d=>d.risk_score>=0.7).length,mid=ranked.filter(d=>d.risk_score>=0.4&&d.risk_score<0.7).length,low=ranked.filter(d=>d.risk_score<0.4).length;
  const dist=[{name:"低风险 (<40%)",value:low},{name:"中风险 (40–70%)",value:mid},{name:"高风险 (≥70%)",value:high}];
  const top=ranked.slice(0,8).map(d=>({name:d.equipment_id,risk:Math.round(d.risk_score*1000)/10}));
+ const selected=ranked.find(d=>d.equipment_id===focused);
  const averageRisk=devices.length?devices.reduce((total,d)=>total+d.risk_score,0)/devices.length*100:null;
  return <>
   <div className="metrics">
@@ -55,12 +57,14 @@ export function RiskInsights({devices}:{devices:Device[]}) {
   </div>
   <div className="content-grid">
     <Panel title="演示风险排行 TOP 8" note="按评分从高到低">
-     {top.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={top} layout="vertical" margin={{left:10,right:20}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" domain={[0,100]} unit="%"/><YAxis type="category" dataKey="name" width={68} tick={{fontSize:11}}/><Tooltip formatter={(v)=>[String(v)+"%","模拟风险"]}/><Bar dataKey="risk" fill="#f97316" radius={[0,5,5,0]}/></BarChart></ResponsiveContainer></div>:<Placeholder message="暂无演示风险数据"/>}
+     {top.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={top} layout="vertical" margin={{left:10,right:20}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" domain={[0,100]} unit="%"/><YAxis type="category" dataKey="name" width={68} tick={{fontSize:11}}/><Tooltip formatter={(v)=>[String(v)+"%","模拟风险"]}/><Bar dataKey="risk" fill="#f97316" radius={[0,5,5,0]} onClick={entry=>setFocused(String(entry?.name??entry?.payload?.name??""))}/></BarChart></ResponsiveContainer></div>:<Placeholder message="暂无演示风险数据"/>}
     </Panel>
     <Panel title="风险等级结构" note="40% / 70% 分界阈值">
      {devices.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={dist} dataKey="value" nameKey="name" innerRadius={52} outerRadius={91} label>{dist.map((_,i)=><Cell key={i} fill={["#94a3b8","#ffba77","#f97316"][i]}/>)}</Pie><Tooltip/><Legend/></PieChart></ResponsiveContainer></div>:<Placeholder message="暂无风险分布数据"/>}
     </Panel>
   </div>
+  <div className="risk-device-select"><span>点击图表柱形或以下设备查看详情：</span>{top.map(d=><button key={d.name} className={focused===d.name?"risk-chip active":"risk-chip"} onClick={()=>setFocused(d.name)}>{d.name}</button>)}</div>
+  {selected&&<div className="selected-detail"><div><b>{selected.equipment_name}</b><span>{selected.equipment_id} · {selected.production_line||"未分配产线"}</span></div><div>演示风险 <b>{(selected.risk_score*100).toFixed(1)}%</b></div><div>设备状态 <b>{selected.status}</b></div><button onClick={()=>setFocused("")}>清除选择</button></div>}
   <p className="insight-note">风险值来自测试Excel“08_风险评分演示”，不是AI模型输出。阈值仅为界面演示分组规则。</p>
  </>;
 }
