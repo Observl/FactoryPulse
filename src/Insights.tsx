@@ -50,7 +50,7 @@ export function RiskInsights({devices}:{devices:Device[]}) {
     <Stat label="高风险设备" value={high} desc="演示评分 ≥ 70%" accent/>
     <Stat label="中风险设备" value={mid} desc="演示评分 40%–70%"/>
     <Stat label="低风险设备" value={low} desc="演示评分 < 40%"/>
-    <Stat label="平均模拟风险" value={devices.length?<Figure value={avg(devices.map(d=>d.risk_score))*100} suffix="%" digits={1}/>: "—"} desc="非训练模型预测"/>
+    <Stat label="平均模拟风险" value={devices.length?<Figure value={(avg(devices.map(d=>d.risk_score))??0)*100} suffix="%" digits={1}/>: "—"} desc="非训练模型预测"/>
   </div>
   <div className="content-grid">
     <Panel title="演示风险排行 TOP 8" note="按评分从高到低">
