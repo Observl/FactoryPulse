@@ -36,8 +36,6 @@ jobs:
             { echo '### GitHub Pages 编译诊断'; echo '```'; tail -c 12000 build.log; echo '```'; } > diagnostic.md
             gh issue comment 1 --body-file diagnostic.md
           fi
-      - name: Pages configuration
-        uses: actions/configure-pages@v5
       - name: Confirm static build exists
         run: test -s dist/index.html && test -d dist/assets
       - name: Upload static website
@@ -54,3 +52,9 @@ jobs:
       - name: Publish
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Record Pages deployment failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment 1 --body 'Pages 部署步骤失败：请检查仓库 Settings → Pages → Build and deployment → Source 是否为 GitHub Actions，以及 Actions 中 deploy 任务的具体报错。前端构建已通过。'
