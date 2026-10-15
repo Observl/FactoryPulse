@@ -7,7 +7,7 @@ type Overview = { devices: Device[]; counts: Record<string, number>; filename: s
 const palette = ["#f97316","#ffba77","#64748b","#cbd5e1","#94a3b8","#ea580c"];
 const toNum = (x: unknown): number | null => { if (x === null || x === undefined || x === "") return null; const n=Number(x); return Number.isFinite(n) ? n : null; };
 const avg = (values: (number | null)[]) => { const valid = values.filter((v): v is number => v !== null); return valid.length ? valid.reduce((a,b)=>a+b,0)/valid.length : null; };
-function Figure({value,suffix="",digits=0}:{value:number|null|undefined;suffix?:string;digits?:number}) { return <>{value===null||value===undefined?"—":value.toFixed(digits)+suffix}</> }
+function Figure({value,suffix="",digits=2}:{value:number|null|undefined;suffix?:string;digits?:number}) { return <>{value===null||value===undefined?"—":value.toFixed(digits)+suffix}</> }
 function Stat({label,value,desc,accent=false}:{label:string;value:React.ReactNode;desc:string;accent?:boolean}) { return <div className="metric"><span>{label}</span><strong className={accent?"orange":""}>{value}</strong><small>{desc}</small></div> }
 function Panel({title,note,children}:{title:string;note:string;children:React.ReactNode}) { return <section className="panel"><div className="panel-heading"><h2>{title}</h2><span>{note}</span></div>{children}</section> }
 function Placeholder({message}:{message:string}) { return <div className="chart-empty">{message}</div> }
@@ -33,7 +33,7 @@ export function EquipmentInsights({data}:{data:Overview}) {
    <Stat label="运行监测记录" value={counts.readings||0} desc="Excel历史采样数量"/>
   </div>
   <Panel title="各产线设备状态分布" note="堆叠条形图 · 数量/状态合并">
-   {chart.data.length?<div className="insight-chart stacked-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart.data} layout="vertical" margin={{top:8,right:25,bottom:8,left:7}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={85} tick={{fontSize:12}}/><Tooltip formatter={(value,name)=>[Number(value).toFixed(0)+" 台",String(name)]}/><Legend/>{chart.statuses.map((status,i)=><Bar key={status} stackId="status" dataKey={status} name={status} fill={statusColor(status,i)} radius={0}/>)}</BarChart></ResponsiveContainer></div>:<Placeholder message="导入Excel后显示产线设备状态分布"/>}
+   {chart.data.length?<div className="insight-chart stacked-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart.data} layout="vertical" margin={{top:8,right:25,bottom:8,left:7}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={85} tick={{fontSize:12}}/><Tooltip formatter={(value,name)=>[Number(value).toFixed(2)+" 台",String(name)]}/><Legend/>{chart.statuses.map((status,i)=><Bar key={status} stackId="status" dataKey={status} name={status} fill={statusColor(status,i)} radius={0}/>)}</BarChart></ResponsiveContainer></div>:<Placeholder message="导入Excel后显示产线设备状态分布"/>}
    <p className="insight-note">每条横柱代表一条产线，分块颜色代表Excel中的设备状态，各色块之和为该产线设备总数。</p>
   </Panel>
  </>;
@@ -52,7 +52,7 @@ export function RiskInsights({devices}:{devices:Device[]}) {
     <Stat label="高风险设备" value={high} desc="演示评分 ≥ 70%" accent/>
     <Stat label="中风险设备" value={mid} desc="演示评分 40%–70%"/>
     <Stat label="低风险设备" value={low} desc="演示评分 < 40%"/>
-    <Stat label="平均模拟风险" value={<Figure value={averageRisk} suffix="%" digits={1}/>} desc="非训练模型预测"/>
+    <Stat label="平均模拟风险" value={<Figure value={averageRisk} suffix="%" digits={2}/>} desc="非训练模型预测"/>
   </div>
   <div className="content-grid">
     <Panel title="演示风险排行 TOP 8" note="按评分从高到低">
@@ -63,7 +63,7 @@ export function RiskInsights({devices}:{devices:Device[]}) {
     </Panel>
   </div>
   <div className="risk-device-select"><span>点击图表柱形或以下设备查看详情：</span>{top.map(d=><button key={d.name} className={focused===d.name?"risk-chip active":"risk-chip"} onClick={()=>setFocused(d.name)}>{d.name}</button>)}</div>
-  {selected&&<div className="selected-detail"><div><b>{selected.equipment_name}</b><span>{selected.equipment_id} · {selected.production_line||"未分配产线"}</span></div><div>演示风险 <b>{(selected.risk_score*100).toFixed(1)}%</b></div><div>设备状态 <b>{selected.status}</b></div><button onClick={()=>setFocused("")}>清除选择</button></div>}
+  {selected&&<div className="selected-detail"><div><b>{selected.equipment_name}</b><span>{selected.equipment_id} · {selected.production_line||"未分配产线"}</span></div><div>演示风险 <b>{(selected.risk_score*100).toFixed(2)}%</b></div><div>设备状态 <b>{selected.status}</b></div><button onClick={()=>setFocused("")}>清除选择</button></div>}
   <p className="insight-note">风险值来自测试Excel“08_风险评分演示”，不是AI模型输出。阈值仅为界面演示分组规则。</p>
  </>;
 }
@@ -89,7 +89,7 @@ export function AnomalyInsights({devices,version}:{devices:Device[];version:stri
   <div className="metrics">
    <Stat label="设备监测覆盖" value={`${visible}/${devices.length}`} desc="具备工艺温度读数"/>
    <Stat label="平均工艺温度" value={<Figure value={avg(temps)} suffix=" K" digits={1}/>} desc="最新监测值"/>
-   <Stat label="平均设备转速" value={<Figure value={avg(speeds)} suffix=" rpm" digits={0}/>} desc="最新监测值"/>
+   <Stat label="平均设备转速" value={<Figure value={avg(speeds)} suffix=" rpm" digits={2}/>} desc="最新监测值"/>
    <Stat label="可查看的历史采样" value={readings.length} desc={loading?"加载中":"已加载记录数"}/>
   </div>
   <div className="content-grid">
