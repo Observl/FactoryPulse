@@ -1,5 +1,6 @@
 import {read,utils} from "xlsx";
 type Row=Record<string,unknown>;
+type DeviceRecord=Row & {equipment_id:string;equipment_name:string;risk_score:number;risk_level:string;risk_origin:string;latest_reading:Row};
 type Tables=Record<string,Row[]>;
 const names:Record<string,string>={
  equipment:"01_设备档案",readings:"02_运行监测",maintenance_rules:"03_维护参数",
@@ -37,7 +38,7 @@ try{const stored=localStorage.getItem(key);if(stored){const state=JSON.parse(sto
 function response(body:unknown,status=200,headers?:HeadersInit){return new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json; charset=utf-8",...headers}})}
 function error(message:string,status=422){return response({detail:message},status)}
 function latestByDevice(){const last=new Map<string,Row>();for(const r of tables.readings||[]){const id=String(r.equipment_id);if(!last.has(id)||String(r.timestamp)>String(last.get(id)?.timestamp))last.set(id,r)}return last}
-function devices(){const risk=new Map((tables.demo_risks||[]).map(r=>[String(r.equipment_id),r]));const last=latestByDevice();return (tables.equipment||[]).map(e=>{const id=String(e.equipment_id);const score=n(risk.get(id)?.risk_score);return {...e,risk_score:score,risk_level:score>=.7?"高":score>=.4?"中":"低",risk_origin:"DEMO_ONLY_NOT_MODEL_OUTPUT",latest_reading:last.get(id)||{}}})}
+function devices():DeviceRecord[]{const risk=new Map((tables.demo_risks||[]).map(r=>[String(r.equipment_id),r]));const last=latestByDevice();return (tables.equipment||[]).map(e=>{const id=String(e.equipment_id);const score=n(risk.get(id)?.risk_score);return {...e,equipment_id:id,equipment_name:String(e.equipment_name??id),risk_score:score,risk_level:score>=.7?"高":score>=.4?"中":"低",risk_origin:"DEMO_ONLY_NOT_MODEL_OUTPUT",latest_reading:last.get(id)||{}}})}
 function overview(){const ds=devices();const scores=ds.map(d=>n(d.risk_score));return {devices:ds,counts:Object.fromEntries(Object.keys(names).map(k=>[k,tables[k]?.length||0])),metrics:{total:ds.length,high:scores.filter(x=>x>=.7).length,warning:scores.filter(x=>x>=.4&&x<.7).length,avg_risk:scores.length?Number((scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(3)):0},filename:uploadedFilename,risk_source:"网页端本地演示数据（非训练模型预测）"}}
 function validate(next:Tables){
  const ids=new Set((next.equipment||[]).map(r=>String(r.equipment_id)));
