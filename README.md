@@ -4,6 +4,28 @@
 
 > **请先了解：** 本项目目前用于课程、竞赛和功能演示。Excel 中的设备、维修、订单、风险值均为**模拟数据**。风险分数不是训练好的 AI 模型预测，维护成本也不是工厂真实收益。不要用它做实际安全决策。
 
+## 🌐 网页版：通过 GitHub Actions 自动发布到 GitHub Pages
+
+**预期网址：** https://observl.github.io/FactoryPulse/
+
+1. 打开仓库的 [Actions](https://github.com/Observl/FactoryPulse/actions)。
+2. 找到 **Publish FactoryPulse Web Demo** 工作流，确认最新一次运行结果为绿色成功。
+3. 打开 [Settings → Pages](https://github.com/Observl/FactoryPulse/settings/pages)，在 **Build and deployment** 下查看是否已选择 **GitHub Actions**。若未生效，请手动选择 GitHub Actions，并重新运行工作流。
+4. 工作流成功且 Pages 状态显示已发布后，再访问上述网址。首次发布可能需要等待数分钟。
+5. 如果仓库是私有的，需确认当前 GitHub 账户方案允许从私有仓库发布 Pages。
+
+网页版**无需安装 Python、Node.js，也无需运行 FastAPI**。首次访问会载入 12 台**内置模拟设备**；之后可在“设备管理”上传此项目的 **FactoryPulse_完整功能测试数据与字段字典.xlsx**（见本聊天提供的下载文件），网页会本地解析并替换演示数据。请按下面的 Excel 导入、风险分析、维护策略与 CSV 下载流程测试。
+
+**网页版特别说明：**
+
+- GitHub Pages 仅托管静态页面；Excel 在**浏览器本地**读取，维护策略计算也在本地完成。
+- 上传数据保存在当前浏览器的 localStorage 中。更换浏览器或清除网站数据后需重新导入；浏览器空间不足时不能持久化。
+- 网页版禁用 AI API Key 保存及 Factory Copilot 的第三方 AI 调用，以免把密钥暴露在公开网页中。本地桌面版仍支持后端 AI API 设置。
+- 此网页只用于演示，不要上传公司的机密或真实生产数据，也不要将模拟风险结果用于生产决策。
+- “GitHub Actions 发布成功”与“网页能正常使用”是两项独立验收：还需在浏览器手动导入 Excel、比较方案并导出 CSV。
+
+---
+
 ## 一、目前能做什么？
 
 | 页面 | 具体可以做的事 | 状态 |
