@@ -92,7 +92,7 @@ function simulate(body:Record<string,unknown>){
  return {scenario:String(s.scenario_name||"自定义"),strategy,selected:output,constraints:{budget,risk_threshold:threshold,staff_count:people,max_downtime_h:maxHours},summary:{task_count:output.length,maintenance_cost:Number(spent.toFixed(2)),maintenance_hours:Number(elapsed.toFixed(2)),baseline_expected_loss:Number(baseline.toFixed(2)),expected_loss_after:Number((baseline-avoided).toFixed(2)),illustrative_total_cost:Number((baseline-avoided+spent).toFixed(2))},disclaimer:"网页端浏览器计算，维护降风险60%仅为演示假设；贪心非全局最优，成本非真实工厂收益。"};
 }
 function exportCsv(scenario:string,strategy:string){
- const r=simulate({scenario_id:scenario,strategy});const fields=["设备ID,设备名称,演示风险,维护成本,工时,人员数,假设避免损失"];for(const v of r.selected)fields.push([v.equipment_id,v.equipment_name,v.risk,v.cost,v.hours,v.people,v.expected_loss_avoided].map(x=>'"'+String(x).replaceAll('"','""')+'"').join(","));
+ const r=simulate({scenario_id:scenario,strategy});const fields=["设备ID,设备名称,演示风险,维护成本,工时,人员数,假设避免损失"];for(const v of r.selected)fields.push([v.equipment_id,v.equipment_name,v.risk,v.cost,v.hours,v.people,v.expected_loss_avoided].map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(","));
  return "\ufeff"+fields.join("\r\n");
 }
 export function installDemoApi(){
