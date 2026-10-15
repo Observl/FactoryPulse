@@ -2,16 +2,19 @@ import { EquipmentInsights, RiskInsights, AnomalyInsights } from "./Insights";
 import {useEffect,useState,type ChangeEvent} from "react";
 import {Factory,Settings2,Upload,RefreshCw,LayoutDashboard,ServerCog,ShieldAlert,Activity,ChartNoAxesCombined,CalendarClock,Bot,ArrowUpRight,Search,FileSpreadsheet,Menu,X,ChevronRight} from "lucide-react";
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer} from "recharts";
-type D={equipment_id:string;equipment_name:string;status:string;production_line?:string;risk_score:number;latest_reading?:{process_temperature_k?:number;rotational_speed_rpm?:number}};
+type D={equipment_id:string;equipment_name:string;equipment_type?:string;status:string;production_line?:string;risk_score:number;latest_reading?:{timestamp?:string;air_temperature_k?:number;process_temperature_k?:number;rotational_speed_rpm?:number;torque_nm?:number;tool_wear_min?:number}};
 type O={devices:D[];counts:Record<string,number>;metrics:{total:number;high:number;warning:number;avg_risk:number};filename:string};
 type S={scenario_id:string;scenario_name:string};
 type Result={selected:{equipment_id:string;cost:number;hours:number;risk:number}[];summary:{task_count:number;maintenance_cost:number;maintenance_hours:number;illustrative_total_cost:number};disclaimer:string};
+const fmt=(v:number|null|undefined)=>v===null||v===undefined||!Number.isFinite(v)?"—":v.toFixed(2);
+const money=(v:number)=>"¥"+fmt(v);
+const isWarning=(status:string)=>/预警|告警|异常|故障|停机|高风险/.test(status);
 const initial:O={devices:[],counts:{},metrics:{total:0,high:0,warning:0,avg_risk:0},filename:""};
 async function api(path:string,options?:RequestInit){const r=await fetch("/api"+path,options);const data=await r.json();if(!r.ok)throw Error(String(data.detail||r.status));return data;}
 export default function App(){
 const [page,setPage]=useState("设备总览"),[data,setData]=useState<O>(initial),[scenarios,setScenarios]=useState<S[]>([]),[sid,setSid]=useState(""),[strategy,setStrategy]=useState("optimized");
 const [comparison,setComparison]=useState<{strategies:{strategy:string;summary:Result["summary"]}[]}|null>(null),[question,setQuestion]=useState("目前设备风险概况如何？"),[reply,setReply]=useState(""),[result,setResult]=useState<Result|null>(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
-const [selectedDevice,setSelectedDevice]=useState(""),[search,setSearch]=useState(""),[dragOver,setDragOver]=useState(false),[mobileMenu,setMobileMenu]=useState(false);
+const [selectedDevice,setSelectedDevice]=useState(""),[detailOpen,setDetailOpen]=useState(false),[lineFilter,setLineFilter]=useState("all"),[stateFilter,setStateFilter]=useState("all"),[typeFilter,setTypeFilter]=useState("all"),[riskFilter,setRiskFilter]=useState("all"),[search,setSearch]=useState(""),[dragOver,setDragOver]=useState(false),[mobileMenu,setMobileMenu]=useState(false);
 const [cfg,setCfg]=useState({provider:"custom",base_url:"",model:"",api_key:""}),[hasKey,setHasKey]=useState(false);
 async function refresh(){try{const o=await api("/overview");setData(o);const s=await api("/records/scenarios");setScenarios(s.records);setSid(v=>v||s.records[0]?.scenario_id||"");}catch(e){setError("后端未启动："+String(e));}}
 useEffect(()=>{refresh();api("/developer/settings").then(v=>{setCfg({provider:v.provider,base_url:v.base_url,model:v.model,api_key:""});setHasKey(v.has_api_key)}).catch(()=>{});},[]);
@@ -22,9 +25,32 @@ const isWebDemo=import.meta.env.VITE_STATIC_DEMO==="true";
 const nav=[{name:"设备总览",Icon:LayoutDashboard},{name:"设备管理",Icon:ServerCog},{name:"风险预测",Icon:Activity},{name:"异常解释",Icon:ShieldAlert},{name:"维护策略",Icon:ChartNoAxesCombined},{name:"维护计划",Icon:CalendarClock},{name:"Factory Copilot",Icon:Bot},{name:"开发者设置",Icon:Settings2}];
 const primaryMobile=nav.slice(0,4);
 function navigate(next:string){setPage(next);setMobileMenu(false);window.scrollTo({top:0,behavior:"auto"});}
-const listed=data.devices.filter(d=>[d.equipment_id,d.equipment_name,d.production_line||""].some(t=>t.toLowerCase().includes(search.trim().toLowerCase())));
+const lineOptions=[...new Set(data.devices.map(d=>d.production_line||"未分配"))].sort();
+const stateOptions=[...new Set(data.devices.map(d=>d.status||"未标注"))].sort();
+const typeOptions=[...new Set(data.devices.map(d=>d.equipment_type||"未分类"))].sort();
+const listed=data.devices.filter(d=>
+ [d.equipment_id,d.equipment_name,d.production_line||""].some(t=>t.toLowerCase().includes(search.trim().toLowerCase()))
+ &&(lineFilter==="all"||(d.production_line||"未分配")===lineFilter)
+ &&(stateFilter==="all"||(d.status||"未标注")===stateFilter)
+ &&(typeFilter==="all"||(d.equipment_type||"未分类")===typeFilter)
+ &&(riskFilter==="all"||(riskFilter==="high"&&d.risk_score>=.7)||(riskFilter==="medium"&&d.risk_score>=.4&&d.risk_score<.7)||(riskFilter==="low"&&d.risk_score<.4))
+);
 const selected=data.devices.find(d=>d.equipment_id===selectedDevice);
-const deviceTable=<section className="panel table-panel"><div className="panel-heading"><h2>设备明细 · 点击设备查看详情</h2><span>{listed.length}/{data.devices.length}台</span></div><div className="device-toolbar"><Search size={16}/><input aria-label="搜索设备" placeholder="搜索设备编号、名称或产线…" value={search} onChange={e=>setSearch(e.target.value)}/>{search&&<button onClick={()=>setSearch("")}>清除</button>}</div><div className="table-scroll"><table><thead><tr>{["设备编号","设备名称","产线","状态","演示风险评分","工艺温度 (K)","转速 (rpm)"].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{listed.map(d=><tr className={selectedDevice===d.equipment_id?"device-row picked":"device-row"} key={d.equipment_id} tabIndex={0} role="button" aria-label={"查看"+d.equipment_id+"详情"} onClick={()=>setSelectedDevice(d.equipment_id)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setSelectedDevice(d.equipment_id)}}}><td>{d.equipment_id}</td><td>{d.equipment_name}</td><td>{d.production_line}</td><td>{d.status}</td><td className={d.risk_score>=.7?"orange":""}>{(d.risk_score*100).toFixed(1)}%</td><td>{d.latest_reading?.process_temperature_k||"—"}</td><td>{d.latest_reading?.rotational_speed_rpm||"—"}</td></tr>)}</tbody></table></div>{selected&&<div className="selected-detail"><div><b>{selected.equipment_name}</b><span>{selected.equipment_id} · {selected.production_line||"未分配产线"}</span></div><div>模拟风险 <b>{(selected.risk_score*100).toFixed(1)}%</b></div><div>工艺温度 <b>{selected.latest_reading?.process_temperature_k??"—"} K</b></div><button onClick={()=>setPage("异常解释")}>查看监测分析 <ArrowUpRight size={14}/></button></div>}</section>;
+function openDevice(id:string){setSelectedDevice(id);setDetailOpen(true);}
+const deviceTable=<section className="panel table-panel">
+ <div className="panel-heading"><h2>设备清单 · 点击查看设备卡片</h2><span>筛选结果 {listed.length}/{data.devices.length} 台</span></div>
+ <div className="filter-toolbar">
+  <label className="device-search"><Search size={16}/><input aria-label="搜索设备" placeholder="搜索编号、名称或产线" value={search} onChange={e=>setSearch(e.target.value)}/></label>
+  <label>产线<select aria-label="筛选产线" value={lineFilter} onChange={e=>setLineFilter(e.target.value)}><option value="all">全部产线</option>{lineOptions.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+  <label>设备状态<select aria-label="筛选设备状态" value={stateFilter} onChange={e=>setStateFilter(e.target.value)}><option value="all">全部状态</option>{stateOptions.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+  <label>设备类型<select aria-label="筛选设备类型" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="all">全部类型</option>{typeOptions.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+  <label>风险等级<select aria-label="筛选风险等级" value={riskFilter} onChange={e=>setRiskFilter(e.target.value)}><option value="all">全部风险</option><option value="high">高风险 ≥70%</option><option value="medium">中风险 40–70%</option><option value="low">低风险 ＜40%</option></select></label>
+  <button className="reset-filters" type="button" onClick={()=>{setSearch("");setLineFilter("all");setStateFilter("all");setTypeFilter("all");setRiskFilter("all");}}>重置筛选</button>
+ </div>
+ <div className="table-scroll"><table><thead><tr>{["设备编号","设备名称","产线","设备类型","设备状态","演示风险评分","最新记录时间","工艺温度 (K)","转速 (rpm)"].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>
+ {listed.map(d=><tr className={selectedDevice===d.equipment_id?"device-row picked":"device-row"} key={d.equipment_id} tabIndex={0} role="button" aria-label={"查看"+d.equipment_id+"设备信息卡片"} onClick={()=>openDevice(d.equipment_id)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openDevice(d.equipment_id)}}}><td>{d.equipment_id}</td><td>{d.equipment_name}</td><td>{d.production_line||"—"}</td><td>{d.equipment_type||"—"}</td><td><span className={isWarning(d.status)?"device-alert":"device-normal"}>{d.status}</span></td><td className={d.risk_score>=.7?"orange":""}>{fmt(d.risk_score*100)}%</td><td>{d.latest_reading?.timestamp||"—"}</td><td>{fmt(d.latest_reading?.process_temperature_k)}</td><td>{fmt(d.latest_reading?.rotational_speed_rpm)}</td></tr>)}
+ </tbody></table>{listed.length===0&&<p className="filter-empty">当前筛选条件没有匹配设备，请调整条件或重置。</p>}</div>
+ </section>;
 return <div className="layout">
 <aside className="sidebar" aria-label="桌面导航">
   <div className="brand"><span className="brand-icon"><Factory size={20}/></span><div>FactoryPulse<small>工业智能维护平台</small></div></div>
@@ -45,7 +71,25 @@ return <div className="layout">
 {page==="异常解释"&&<><AnomalyInsights devices={data.devices} version={data.filename+"-"+data.counts.readings}/><section className="panel"><h2>异常解释中心 · 数据依据</h2><p className="hint">当前提供设备风险评分与最新工况数据对照，不做因果推断。AI文本解释将在模型和受控工具接入后提供。</p><div className="table-scroll"><table><thead><tr><th>设备</th><th>演示风险</th><th>工艺温度 (K)</th><th>转速 (rpm)</th><th>数据来源</th></tr></thead><tbody>{data.devices.map(d=><tr key={d.equipment_id}><td>{d.equipment_id}</td><td>{(d.risk_score*100).toFixed(1)}%</td><td>{d.latest_reading?.process_temperature_k??"—"}</td><td>{d.latest_reading?.rotational_speed_rpm??"—"}</td><td>模拟工作簿</td></tr>)}</tbody></table></div></section></>}
 {page==="维护计划"&&<><section className="panel"><h2>维护计划预览</h2><p className="hint">在“维护策略”运行仿真后，候选任务在此同步显示。正式人员分配、排程与订单冲突求解尚未实现。</p>{result?<div className="table-scroll"><table><thead><tr><th>设备</th><th>预计工时</th><th>模拟费用</th></tr></thead><tbody>{result.selected.map(t=><tr key={t.equipment_id}><td>{t.equipment_id}</td><td>{t.hours}h</td><td>¥{t.cost}</td></tr>)}</tbody></table></div>:<p>请先前往“维护策略”生成方案。</p>}</section><DataPreview title="维护历史" endpoint="maintenance_history"/><DataPreview title="维修人员" endpoint="staff"/><DataPreview title="生产订单" endpoint="orders"/></>}
 {page==="Factory Copilot"&&<section className="panel developer"><h2>{isWebDemo?"Factory Copilot · 网页版未开放":"Factory Copilot · 演示数据问答"}</h2><p className="hint">{isWebDemo?"GitHub Pages不运行后端，不能安全存放API密钥。网页版仅演示本地Excel数据与维护方案。":"接入已配置的AI API。仅向外部服务发送设备数量、模拟风险汇总和记录数，不发送维修人员、设备明细或原始订单；回答不能视为真实设备诊断。"}</p><label className="chat-label">问题<textarea rows={4} maxLength={1000} value={question} onChange={e=>setQuestion(e.target.value)}/></label><div className="actions"><button className="primary" disabled={busy||isWebDemo||!question.trim()} onClick={()=>run(async()=>{const out=await api("/copilot/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question})});setReply(out.answer)})}>询问 Factory Copilot</button><button className="secondary" onClick={()=>setPage("开发者设置")}>AI API 设置</button></div>{reply&&<div className="chat-result"><strong>Copilot 回答</strong><p>{reply}</p></div>}</section>}
-</main></div>}
+</main>
+{detailOpen&&selected&&<div className="device-modal-backdrop" onClick={()=>setDetailOpen(false)}>
+ <section className="device-modal" role="dialog" aria-modal="true" aria-label={selected.equipment_name+"的设备信息"} onClick={e=>e.stopPropagation()}>
+  <div className="device-modal-header"><div><span className="eyebrow">EQUIPMENT / DETAIL</span><h2>{selected.equipment_name}</h2><p>{selected.equipment_id} · {selected.production_line||"未分配产线"}</p></div><button type="button" className="modal-close" aria-label="关闭设备信息卡片" onClick={()=>setDetailOpen(false)}><X size={20}/></button></div>
+  <div className="device-modal-summary"><span className={isWarning(selected.status)?"device-alert":"device-normal"}>{selected.status}</span><strong>演示风险 {fmt(selected.risk_score*100)}%</strong></div>
+  <div className="device-modal-grid">
+   <div><small>设备类型</small><b>{selected.equipment_type||"—"}</b></div>
+   <div><small>所在产线</small><b>{selected.production_line||"—"}</b></div>
+   <div><small>最新监测时间</small><b>{selected.latest_reading?.timestamp||"暂无记录"}</b></div>
+   <div><small>工艺温度</small><b>{fmt(selected.latest_reading?.process_temperature_k)} K</b></div>
+   <div><small>空气温度</small><b>{fmt(selected.latest_reading?.air_temperature_k)} K</b></div>
+   <div><small>转速</small><b>{fmt(selected.latest_reading?.rotational_speed_rpm)} rpm</b></div>
+   <div><small>扭矩</small><b>{fmt(selected.latest_reading?.torque_nm)} Nm</b></div>
+   <div><small>刀具使用时间</small><b>{fmt(selected.latest_reading?.tool_wear_min)} min</b></div>
+  </div>
+  <p className="hint">监测时间取自该设备Excel运行监测表的最新记录，风险评分来自演示数据，不表示实时设备状态。</p>
+  <div className="actions"><button type="button" className="primary" onClick={()=>{setDetailOpen(false);navigate("异常解释")}}>查看异常分析 <ArrowUpRight size={15}/></button><button type="button" className="secondary" onClick={()=>setDetailOpen(false)}>关闭</button></div>
+ </section></div>}
+</div>}
 
 function DataPreview({title,endpoint}:{title:string;endpoint:string}){
 const [items,setItems]=useState<Record<string,unknown>[]>([]);
