@@ -1,45 +1,29 @@
-import { useEffect, useState } from "react";
-import { Activity, Bot, CalendarClock, ChartNoAxesCombined, ClipboardList, Database, Factory, Gauge, Settings2, ShieldAlert } from "lucide-react";
-import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-
-type Device = { equipment_id: string; equipment_name: string; equipment_type: string; status: string; risk_score: number; temperature_k: number; rotational_speed_rpm: number };
-const fallback: Device[] = [
-  { equipment_id: "CNC-001", equipment_name: "立式加工中心 A", equipment_type: "CNC", status: "正常", risk_score: 0.12, temperature_k: 307.4, rotational_speed_rpm: 1450 },
-  { equipment_id: "CNC-002", equipment_name: "精密铣削中心 B", equipment_type: "CNC", status: "预警", risk_score: 0.76, temperature_k: 313.2, rotational_speed_rpm: 1710 },
-  { equipment_id: "CNC-003", equipment_name: "五轴加工中心 C", equipment_type: "CNC", status: "高风险", risk_score: 0.89, temperature_k: 317.1, rotational_speed_rpm: 1820 },
-  { equipment_id: "CNC-004", equipment_name: "数控车床 D", equipment_type: "CNC", status: "正常", risk_score: 0.19, temperature_k: 305.7, rotational_speed_rpm: 1310 },
-  { equipment_id: "CNC-005", equipment_name: "加工中心 E", equipment_type: "CNC", status: "正常", risk_score: 0.31, temperature_k: 309.1, rotational_speed_rpm: 1540 },
-  { equipment_id: "CNC-006", equipment_name: "加工中心 F", equipment_type: "CNC", status: "预警", risk_score: 0.68, temperature_k: 312.4, rotational_speed_rpm: 1690 }
-];
-const nav = [
-  { name: "设备总览", icon: Gauge }, { name: "设备管理", icon: Database }, { name: "风险预测", icon: Activity },
-  { name: "异常解释", icon: ShieldAlert }, { name: "维护策略", icon: ChartNoAxesCombined },
-  { name: "维护计划", icon: CalendarClock }, { name: "Factory Copilot", icon: Bot }
-];
-export default function App() {
-  const [page, setPage] = useState("设备总览");
-  const [devices, setDevices] = useState<Device[]>(fallback);
-  const [source, setSource] = useState("内置模拟数据");
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/equipment", { signal: controller.signal }).then(r => { if (!r.ok) throw Error("API unavailable"); return r.json(); })
-      .then((data: { devices: Device[]; data_source: string }) => { setDevices(data.devices); setSource(data.data_source); })
-      .catch(() => {});
-    return () => controller.abort();
-  }, []);
-  const warning = devices.filter(d => d.risk_score >= 0.6).length;
-  const avg = devices.length ? devices.reduce((s, d) => s + d.risk_score, 0) / devices.length : 0;
-  return <div className="layout">
-    <aside className="sidebar"><div className="brand"><span className="brand-icon"><Factory size={20}/></span><div>FactoryPulse<small>工业智能维护平台</small></div></div>
-      <div className="nav-title">工作空间</div><nav>{nav.map(({ name, icon: Icon }) => <button key={name} className={page === name ? "nav active" : "nav"} onClick={() => setPage(name)}><Icon size={18}/>{name}</button>)}</nav>
-      <div className="sidebar-footer"><Settings2 size={16}/> 本地演示版本 v0.1.0</div>
-    </aside>
-    <main className="main"><header><div><div className="eyebrow">FACTORY OPERATIONS / OVERVIEW</div><h1>{page}</h1><p>制造设备健康监测与维护辅助决策</p></div><span className="demo-tag">模拟数据 · 不代表真实预测</span></header>
-      {page === "设备总览" || page === "设备管理" ? <>
-        <div className="metrics"><div className="metric"><span>设备总数</span><strong>{devices.length}</strong><small>当前样本设备</small></div><div className="metric"><span>高风险与预警</span><strong className="orange">{warning}</strong><small>风险评分 ≥ 0.60</small></div><div className="metric"><span>平均风险评分</span><strong>{(avg * 100).toFixed(1)}%</strong><small>演示风险评分</small></div><div className="metric"><span>数据来源</span><strong className="source">{source === "内置模拟数据" ? "本地" : "API"}</strong><small>{source}</small></div></div>
-        <div className="content-grid"><section className="panel chart-panel"><div className="panel-heading"><h2>设备风险分布</h2><span>模拟评分（0–100%）</span></div><ResponsiveContainer width="100%" height={250}><BarChart data={devices.map(d => ({ name: d.equipment_id, risk: Math.round(d.risk_score * 100) }))}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf0f2"/><XAxis dataKey="name" tick={{ fontSize: 11 }}/><YAxis domain={[0, 100]} tick={{ fontSize: 11 }}/><Tooltip formatter={(v) => [v + "%", "风险评分"]}/><Bar dataKey="risk" fill="#f97316" radius={[5, 5, 0, 0]}/></BarChart></ResponsiveContainer></section>
-        <section className="panel info-panel"><div className="panel-heading"><h2>系统状态</h2><span>DEMO</span></div><div className="info-row"><span>设备数据</span><b>已加载</b></div><div className="info-row"><span>故障预测模型</span><b>待接入</b></div><div className="info-row"><span>维护优化引擎</span><b>待接入</b></div><div className="info-row"><span>AI API</span><b>待配置</b></div><p className="hint">此页面用于验证桌面框架、接口联动与基础交互。当前风险评分为模拟值，不是机器学习模型输出。</p></section></div>
-        <section className="panel table-panel"><div className="panel-heading"><h2>设备运行概览</h2><span>{devices.length} 台设备</span></div><div className="table-scroll"><table><thead><tr><th>设备编号</th><th>设备名称</th><th>类型</th><th>状态</th><th>风险评分</th><th>工艺温度（K）</th><th>转速（rpm）</th></tr></thead><tbody>{devices.map(d => <tr key={d.equipment_id}><td className="mono">{d.equipment_id}</td><td>{d.equipment_name}</td><td>{d.equipment_type}</td><td><span className={d.risk_score >= 0.6 ? "status warn" : "status"}>{d.status}</span></td><td className={d.risk_score >= 0.6 ? "orange" : ""}>{(d.risk_score * 100).toFixed(0)}%</td><td>{d.temperature_k.toFixed(1)}</td><td>{d.rotational_speed_rpm}</td></tr>)}</tbody></table></div></section>
-      </> : <section className="panel placeholder"><ClipboardList size={32} color="#f97316"/><h2>{page} · 开发中</h2><p>该模块已加入项目开发计划，当前版本尚未实现真实业务功能。</p><a href="https://github.com/Observl/FactoryPulse/issues">查看开发 Issues →</a></section>}
-    </main></div>;
-}
+import {useEffect,useState,type ChangeEvent} from "react";
+import {Factory,Settings2,Upload,RefreshCw} from "lucide-react";
+import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer} from "recharts";
+type D={equipment_id:string;equipment_name:string;status:string;production_line?:string;risk_score:number;latest_reading?:{process_temperature_k?:number;rotational_speed_rpm?:number}};
+type O={devices:D[];counts:Record<string,number>;metrics:{total:number;high:number;warning:number;avg_risk:number};filename:string};
+type S={scenario_id:string;scenario_name:string};
+type Result={selected:{equipment_id:string;cost:number;hours:number;risk:number}[];summary:{task_count:number;maintenance_cost:number;maintenance_hours:number;illustrative_total_cost:number};disclaimer:string};
+const initial:O={devices:[],counts:{},metrics:{total:0,high:0,warning:0,avg_risk:0},filename:""};
+async function api(path:string,options?:RequestInit){const r=await fetch("/api"+path,options);const data=await r.json();if(!r.ok)throw Error(String(data.detail||r.status));return data;}
+export default function App(){
+const [page,setPage]=useState("设备总览"),[data,setData]=useState<O>(initial),[scenarios,setScenarios]=useState<S[]>([]),[sid,setSid]=useState(""),[strategy,setStrategy]=useState("optimized");
+const [result,setResult]=useState<Result|null>(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+const [cfg,setCfg]=useState({provider:"custom",base_url:"",model:"",api_key:""}),[hasKey,setHasKey]=useState(false);
+async function refresh(){try{const o=await api("/overview");setData(o);const s=await api("/records/scenarios");setScenarios(s.records);setSid(v=>v||s.records[0]?.scenario_id||"");}catch(e){setError("后端未启动："+String(e));}}
+useEffect(()=>{refresh();api("/developer/settings").then(v=>{setCfg({provider:v.provider,base_url:v.base_url,model:v.model,api_key:""});setHasKey(v.has_api_key)}).catch(()=>{});},[]);
+async function run(action:()=>Promise<void>){setBusy(true);setError("");setNotice("");try{await action()}catch(e){setError(String(e))}finally{setBusy(false)}}
+async function upload(e:ChangeEvent<HTMLInputElement>){const f=e.target.files?.[0];if(!f)return;await run(async()=>{const form=new FormData();form.append("file",f);const out=await api("/import",{method:"POST",body:form});setNotice("成功导入："+Object.values(out.counts).join(" / ")+" 条");setResult(null);await refresh()});e.target.value="";}
+const nav=["设备总览","设备管理","风险预测","异常解释","维护策略","维护计划","Factory Copilot"];
+const deviceTable=<section className="panel table-panel"><div className="panel-heading"><h2>设备明细</h2><span>{data.devices.length}台</span></div><div className="table-scroll"><table><thead><tr>{["设备编号","设备名称","产线","状态","演示风险评分","工艺温度 (K)","转速 (rpm)"].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{data.devices.map(d=><tr key={d.equipment_id}><td>{d.equipment_id}</td><td>{d.equipment_name}</td><td>{d.production_line}</td><td>{d.status}</td><td className={d.risk_score>=.7?"orange":""}>{(d.risk_score*100).toFixed(1)}%</td><td>{d.latest_reading?.process_temperature_k||"—"}</td><td>{d.latest_reading?.rotational_speed_rpm||"—"}</td></tr>)}</tbody></table></div></section>;
+return <div className="layout"><aside className="sidebar"><div className="brand"><span className="brand-icon"><Factory size={20}/></span><div>FactoryPulse<small>工业智能维护平台</small></div></div><div className="nav-title">工作空间</div><nav>{nav.map(n=><button className={page===n?"nav active":"nav"} key={n} onClick={()=>setPage(n)}>{n}</button>)}</nav><div className="sidebar-footer"><button className={page==="开发者设置"?"nav active":"nav"} onClick={()=>setPage("开发者设置")}><Settings2 size={16}/> 开发者设置</button></div></aside>
+<main className="main"><header><div><div className="eyebrow">FACTORY OPERATIONS / MVP</div><h1>{page}</h1><p>设备健康监测与维护辅助决策 · v0.2.0</p></div><span className="demo-tag">模拟数据 · 非真实模型预测</span></header>
+{error&&<div className="alert error">{error}</div>}{notice&&<div className="alert success">{notice}</div>}
+{page==="设备总览"&&<><div className="metrics"><div className="metric"><span>设备总数</span><strong>{data.metrics.total}</strong></div><div className="metric"><span>高风险设备</span><strong className="orange">{data.metrics.high}</strong></div><div className="metric"><span>预警设备</span><strong>{data.metrics.warning}</strong></div><div className="metric"><span>平均演示风险</span><strong>{(data.metrics.avg_risk*100).toFixed(1)}%</strong></div></div><div className="content-grid"><section className="panel"><div className="panel-heading"><h2>设备风险分布</h2><span>演示评分</span></div><ResponsiveContainer width="100%" height={250}><BarChart data={data.devices.map(d=>({name:d.equipment_id,risk:Math.round(d.risk_score*100)}))}><XAxis dataKey="name" tick={{fontSize:10}}/><YAxis domain={[0,100]}/><Tooltip/><Bar dataKey="risk" fill="#f97316" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></section><section className="panel"><div className="panel-heading"><h2>导入状态</h2></div><div className="info-row"><span>工作簿</span><b>{data.filename||"未导入"}</b></div><div className="info-row"><span>监测记录</span><b>{data.counts.readings||0}</b></div><div className="info-row"><span>维护记录</span><b>{data.counts.maintenance_history||0}</b></div><div className="info-row"><span>生产订单</span><b>{data.counts.orders||0}</b></div><p className="hint">请前往设备管理导入测试 Excel。所有风险分数均为演示值。</p></section></div>{deviceTable}</>}
+{page==="设备管理"&&<><section className="panel"><h2>Excel 数据导入</h2><p className="hint">选择此前提供的完整功能测试工作簿（.xlsx，最大8MB）。导入后覆盖当前SQLite中的8张业务表数据。</p><label className="upload"><Upload size={17}/>{busy?"导入中…":"选择测试Excel文件"}<input type="file" accept=".xlsx" disabled={busy} onChange={upload}/></label></section>{deviceTable}</>}
+{page==="风险预测"&&<><section className="panel"><h2>风险分析 · 演示评分</h2><p className="hint">当前风险值直接读取Excel的08_风险评分演示表，尚未接入训练模型。</p></section>{deviceTable}</>}
+{page==="维护策略"&&<><section className="panel"><h2>维护策略实验室</h2><p className="hint">预算、人员和维护时长来自工作簿，计算为可复现的模拟规则，非真实优化验证。</p><div className="form-grid"><label>情景<select value={sid} onChange={e=>setSid(e.target.value)}>{scenarios.map(s=><option value={s.scenario_id} key={s.scenario_id}>{s.scenario_name}</option>)}</select></label><label>策略<select value={strategy} onChange={e=>setStrategy(e.target.value)}><option value="optimized">收益比贪心优化</option><option value="risk_threshold">风险阈值优先</option><option value="fixed_interval">固定顺序对照</option></select></label></div><button className="primary" disabled={busy||!data.devices.length} onClick={()=>run(async()=>setResult(await api("/simulate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario_id:sid,strategy})})))}>运行策略仿真</button></section>{result&&<section className="panel table-panel"><h2>仿真结果</h2><p>选中任务：{result.summary.task_count} · 维护费用：¥{result.summary.maintenance_cost} · 工时：{result.summary.maintenance_hours}h · 综合示意成本：¥{result.summary.illustrative_total_cost}</p><div className="table-scroll"><table><thead><tr><th>设备</th><th>风险</th><th>成本</th><th>时长</th></tr></thead><tbody>{result.selected.map(x=><tr key={x.equipment_id}><td>{x.equipment_id}</td><td>{(x.risk*100).toFixed(0)}%</td><td>¥{x.cost}</td><td>{x.hours}h</td></tr>)}</tbody></table></div><p className="hint">{result.disclaimer}</p></section>}</>}
+{page==="开发者设置"&&<section className="panel developer"><div className="panel-heading"><h2>AI API 开发者接口设置</h2><span>开发者工具</span></div><p className="hint">在此配置兼容Chat Completions的AI服务。当前支持配置与测试连接；Copilot业务工具尚未实现。</p><div className="form-grid"><label>服务商<select value={cfg.provider} onChange={e=>setCfg({...cfg,provider:e.target.value})}><option value="custom">自定义</option><option value="deepseek">DeepSeek</option><option value="qwen">通义千问</option><option value="openai">OpenAI</option></select></label><label>模型名<input value={cfg.model} onChange={e=>setCfg({...cfg,model:e.target.value})} placeholder="模型标识"/></label><label>API Base URL<input value={cfg.base_url} onChange={e=>setCfg({...cfg,base_url:e.target.value})} placeholder="https://api.example.com/v1"/></label><label>API Key<input type="password" autoComplete="new-password" value={cfg.api_key} onChange={e=>setCfg({...cfg,api_key:e.target.value})} placeholder={hasKey?"密钥已设置，留空不变":"输入 API Key"}/></label></div><div className="actions"><button className="primary" disabled={busy} onClick={()=>run(async()=>{const r=await api("/developer/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});setHasKey(r.has_api_key);setCfg({...cfg,api_key:""});setNotice("配置已保存")})}>保存配置</button><button className="secondary" disabled={busy} onClick={()=>run(async()=>{const r=await api("/developer/test-connection",{method:"POST"});setNotice(r.message)})}><RefreshCw size={14}/> 测试连接</button></div><p className="hint">安全提示：API Key只在Python后端进程内存中保存，重启需要重新配置。不会写入Excel、GitHub或浏览器持久存储。</p></section>}
+{["异常解释","维护计划","Factory Copilot"].includes(page)&&<section className="panel placeholder"><h2>{page} · 接口预留</h2><p>数据已保存在SQLite。真实解释、人员排程和Copilot工具调用仍待后续实现。</p></section>}
+</main></div>}
