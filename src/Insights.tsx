@@ -45,12 +45,13 @@ export function RiskInsights({devices}:{devices:Device[]}) {
  const high=ranked.filter(d=>d.risk_score>=0.7).length,mid=ranked.filter(d=>d.risk_score>=0.4&&d.risk_score<0.7).length,low=ranked.filter(d=>d.risk_score<0.4).length;
  const dist=[{name:"低风险 (<40%)",value:low},{name:"中风险 (40–70%)",value:mid},{name:"高风险 (≥70%)",value:high}];
  const top=ranked.slice(0,8).map(d=>({name:d.equipment_id,risk:Math.round(d.risk_score*1000)/10}));
+ const averageRisk=devices.length?devices.reduce((total,d)=>total+d.risk_score,0)/devices.length*100:null;
  return <>
   <div className="metrics">
     <Stat label="高风险设备" value={high} desc="演示评分 ≥ 70%" accent/>
     <Stat label="中风险设备" value={mid} desc="演示评分 40%–70%"/>
     <Stat label="低风险设备" value={low} desc="演示评分 < 40%"/>
-    <Stat label="平均模拟风险" value={devices.length?<Figure value={(avg(devices.map(d=>d.risk_score))??0)*100} suffix="%" digits={1}/>: "—"} desc="非训练模型预测"/>
+    <Stat label="平均模拟风险" value={<Figure value={averageRisk} suffix="%" digits={1}/>} desc="非训练模型预测"/>
   </div>
   <div className="content-grid">
     <Panel title="演示风险排行 TOP 8" note="按评分从高到低">
