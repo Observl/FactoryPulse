@@ -57,7 +57,7 @@ export function RiskInsights({devices}:{devices:Device[]}) {
   </div>
   <div className="content-grid">
     <Panel title="演示风险排行 TOP 8" note="按评分从高到低">
-     {top.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={top} layout="vertical" margin={{left:10,right:20}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" domain={[0,100]} unit="%"/><YAxis type="category" dataKey="name" width={68} tick={{fontSize:11}}/><Tooltip formatter={(v)=>[String(v)+"%","模拟风险"]}/><Bar dataKey="risk" fill="#f97316" radius={[0,5,5,0]} onClick={entry=>setFocused(String(entry?.name??entry?.payload?.name??""))}/></BarChart></ResponsiveContainer></div>:<Placeholder message="暂无演示风险数据"/>}
+     {top.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={top} layout="vertical" margin={{left:10,right:20}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" domain={[0,100]} unit="%"/><YAxis type="category" dataKey="name" width={68} tick={{fontSize:11}}/><Tooltip formatter={(v)=>[String(v)+"%","模拟风险"]}/><Bar dataKey="risk" fill="#f97316" radius={[0,5,5,0]} onClick={(entry: any)=>setFocused(String(entry?.name??entry?.payload?.name??""))}/></BarChart></ResponsiveContainer></div>:<Placeholder message="暂无演示风险数据"/>}
     </Panel>
     <Panel title="风险等级结构" note="40% / 70% 分界阈值">
      {devices.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={dist} dataKey="value" nameKey="name" innerRadius={52} outerRadius={91} label>{dist.map((_,i)=><Cell key={i} fill={["#94a3b8","#ffba77","#f97316"][i]}/>)}</Pie><Tooltip/><Legend/></PieChart></ResponsiveContainer></div>:<Placeholder message="暂无风险分布数据"/>}
