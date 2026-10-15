@@ -16,3 +16,14 @@
 .metrics{margin-bottom:18px}
 .panel+.panel{margin-top:16px}
 @media(min-width:1101px){.content-grid+.panel{margin-top:18px}}
+
+
+/* Three module analytics dashboards */
+.insight-chart{height:270px;min-width:0}
+.insight-chart.compact{height:235px}
+.chart-empty{display:flex;align-items:center;justify-content:center;min-height:230px;color:#9aa3ac;font-size:13px;background:#fafbfc;border-radius:10px}
+.insight-note{color:#8d96a2;font-size:12px;line-height:1.8;margin:12px 0 20px}
+.insight-select-label{font-size:12px;color:#68717d;display:flex;gap:10px;align-items:center;margin:-7px 0 10px}
+.insight-select-label select{min-width:0;max-width:260px;border:1px solid #e6e9ed;padding:7px 9px;border-radius:8px;background:#fff;color:#374151}
+.panel .recharts-legend-wrapper{font-size:11px}
+@media(max-width:780px){.insight-chart{height:230px}.insight-select-label{flex-wrap:wrap}.metrics{gap:10px}}
