@@ -49,12 +49,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Publish
-        id: deployment
-        uses: actions/deploy-pages@v4
-      - name: Record Pages deployment failure
-        if: failure()
+      - name: Verify Pages is enabled
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue comment 1 --body 'Pages 部署步骤失败：请检查仓库 Settings → Pages → Build and deployment → Source 是否为 GitHub Actions，以及 Actions 中 deploy 任务的具体报错。前端构建已通过。'
+          echo "Checking Pages configuration..."
+          if ! gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.build_type' > pages-type.txt 2> pages-error.txt; then
+            cat pages-error.txt
+            echo "::error::GitHub Pages is not enabled or cannot be accessed. Open Settings > Pages > Build and deployment, select GitHub Actions as source and save."
+            exit 1
+          fi
+          echo "Pages build type: $(cat pages-type.txt)"
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
