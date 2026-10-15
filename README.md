@@ -231,3 +231,7 @@ npm run build
 这是竞赛原型，**还不是工业生产系统**。以下功能需要后续版本完善：AI4I 机器学习故障预测、特征归因解释、基于真实模型的维护收益评价、考虑订单冲突和人员班次的排程优化、API密钥的安全持久存储、Windows 安装程序及无依赖电脑的安装验证。
 
 建议按“先用测试Excel跑通全流程 → 再替换风险评分为训练模型输出 → 最后强化优化与正式打包”的顺序迭代。
+
+### GitHub Pages 发布检查
+
+仓库 Settings → Pages → Build and deployment → Source 必须选择 **GitHub Actions**。设置完成后，向 main 提交代码会自动触发 `Publish FactoryPulse Web Demo`；请在 Actions 中确认 `build` 和 `deploy` 均成功，再打开 https://observl.github.io/FactoryPulse/ 。如遇错误，优先检查 `Verify Pages is enabled` 和 `Publish` 步骤的日志。
