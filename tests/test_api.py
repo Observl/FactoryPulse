@@ -30,10 +30,40 @@ def test_import_and_simulate():
 def test_reject_non_xlsx():
     r=client.post("/api/import",files={"file":("bad.txt",b"hello","text/plain")})
     assert r.status_code==400
-def test_developer_settings_do_not_expose_key():
+def test_developer_settings_do_not_expose_key(monkeypatch):
+    monkeypatch.setattr('backend.main.require_public_https', lambda value: None)
     r=client.post("/api/developer/settings",json={"provider":"custom","base_url":"https://example.org/v1","model":"example","api_key":"synthetic-test-secret"})
     assert r.status_code==200
     assert "synthetic-test-secret" not in r.text
     got=client.get("/api/developer/settings")
     assert got.json()["has_api_key"] is True
     assert "synthetic-test-secret" not in got.text
+
+def test_all_strategy_comparison_and_csv():
+    uploaded=client.post("/api/import", files={"file":("test.xlsx", workbook(),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+    assert uploaded.status_code==200,uploaded.text
+    response=client.get("/api/strategies/compare?scenario_id=S-1")
+    assert response.status_code==200,response.text
+    results=response.json()["strategies"]
+    assert {x["strategy"] for x in results}=={"fixed_interval","risk_threshold","optimized"}
+    assert all(x["summary"]["maintenance_cost"]<=2000 for x in results)
+    assert all(x["summary"]["maintenance_hours"]<=8 for x in results)
+    csv_result=client.get("/api/export/maintenance.csv?scenario_id=S-1")
+    assert csv_result.status_code==200
+    assert "text/csv" in csv_result.headers["content-type"]
+    assert "设备ID" in csv_result.text
+
+def test_invalid_risk_is_rejected():
+    from openpyxl import load_workbook
+    b=io.BytesIO(workbook()); wb=load_workbook(b)
+    ws=wb["08_风险评分演示"]
+    risk_col=list(next(ws.values)).index("risk_score")+1
+    ws.cell(row=2,column=risk_col).value=1.5
+    bad=io.BytesIO();wb.save(bad)
+    res=client.post("/api/import",files={"file":("invalid.xlsx",bad.getvalue(),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+    assert res.status_code==422
+    assert "风险评分" in res.text
+
+def test_reject_local_api_destination():
+    response=client.post("/api/developer/settings",json={"provider":"custom","base_url":"https://127.0.0.1/v1","model":"demo"})
+    assert response.status_code==422
