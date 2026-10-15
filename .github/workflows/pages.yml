@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  issues: write
   pages: write
   id-token: write
 concurrency:
@@ -23,9 +24,18 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: TypeScript and Vite build
-        run: npm run build
+        run: npm run build > build.log 2>&1 || { cat build.log; exit 1; }
         env:
           VITE_STATIC_DEMO: 'true'
+      - name: Post compiler diagnostics to development issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if test -f build.log; then
+            { echo '### GitHub Pages 编译诊断'; echo '```'; tail -c 12000 build.log; echo '```'; } > diagnostic.md
+            gh issue comment 1 --body-file diagnostic.md
+          fi
       - name: Pages configuration
         uses: actions/configure-pages@v5
       - name: Confirm static build exists
