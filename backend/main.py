@@ -1,11 +1,13 @@
 """FactoryPulse MVP API: Excel import, SQLite, reproducible maintenance scenarios and API settings."""
 from __future__ import annotations
-import io, json, math, os, sqlite3, threading
+import io, json, math, os, sqlite3, threading, csv, ipaddress, socket
+from urllib.parse import urlparse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 import httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from openpyxl import load_workbook
@@ -55,10 +57,13 @@ def validate(data):
     for table in ("readings","maintenance_rules","maintenance_history","orders","demo_risks"):
         for r in data[table]:
             if str(r.get("equipment_id","")) not in known: raise ValueError(f"{table} 存在未知设备编号 {r.get('equipment_id')}")
+    if len({r.get("equipment_id") for r in data["demo_risks"]}) != len(data["demo_risks"]): raise ValueError("风险评分表设备编号重复")
     for r in data["demo_risks"]:
         score=num(r.get("risk_score"),-1)
         if not 0<=score<=1: raise ValueError("演示风险评分必须在0到1之间")
     if len(known)!=len(data["equipment"]): raise ValueError("设备编号存在重复")
+    for table in ("maintenance_rules","readings","staff","orders","scenarios"):
+        if not data[table]: raise ValueError(f"{TABLES[table][0]} 不可为空")
 @app.get("/api/health")
 def health(): return {"status":"ok","database":str(DB),"version":"0.2.0"}
 @app.post("/api/import")
@@ -171,7 +176,7 @@ def read_api_settings():
 @app.post("/api/developer/settings")
 def save_api_settings(cfg:ApiSettings):
     global _api_key
-    if cfg.base_url and not cfg.base_url.startswith("https://"): raise HTTPException(422,"API地址必须以 https:// 开头")
+    if cfg.base_url: require_public_https(cfg.base_url)
     if cfg.api_key is not None and cfg.api_key.strip(): _api_key=cfg.api_key.strip()
     with _lock,connect() as c:
         for k,v in (("ai_provider",cfg.provider),("ai_base_url",cfg.base_url.rstrip("/")),("ai_model",cfg.model)):
@@ -181,9 +186,60 @@ def save_api_settings(cfg:ApiSettings):
 async def test_connection():
     base=settings_get("ai_base_url"); model=settings_get("ai_model")
     if not base or not model or not _api_key: raise HTTPException(400,"请先配置API地址、模型和密钥")
+    require_public_https(base)
     try:
-        async with httpx.AsyncClient(timeout=12,follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=12,follow_redirects=False,trust_env=False) as client:
             r=await client.post(base+"/chat/completions",headers={"Authorization":"Bearer "+_api_key},json={"model":model,"messages":[{"role":"user","content":"Reply with OK."}],"max_tokens":12})
         if r.status_code>=400: raise HTTPException(400,f"上游返回 HTTP {r.status_code}；请检查地址、密钥和模型。")
         return {"success":True,"message":"API连接测试成功"}
     except httpx.RequestError as e: raise HTTPException(502,"API网络请求失败："+type(e).__name__)
+
+@app.get("/api/strategies/compare")
+def compare_strategies(scenario_id:Optional[str]=None):
+    if not snapshot(): raise HTTPException(400,"请先导入测试工作簿")
+    return {"strategies":[simulate(SimulationInput(scenario_id=scenario_id,strategy=k)) for k in ("fixed_interval","risk_threshold","optimized")],"description":"仅为演示假设下的三策略对照；optimized是贪心规则，不是全局最优算法"}
+
+@app.get("/api/export/maintenance.csv")
+def export_plan(scenario_id:Optional[str]=None,strategy:str="optimized"):
+    result=simulate(SimulationInput(scenario_id=scenario_id,strategy=strategy))
+    out=io.StringIO()
+    writer=csv.writer(out)
+    writer.writerow(["设备ID","设备名称","模拟风险评分","维护成本(元)","预计工时","所需人员数","模拟避免损失(元)"])
+    for item in result["selected"]:
+        writer.writerow([item["equipment_id"],item["equipment_name"],item["risk"],item["cost"],item["hours"],item["people"],item["expected_loss_avoided"]])
+    return StreamingResponse(iter(["\ufeff"+out.getvalue()]),media_type="text/csv; charset=utf-8",headers={"Content-Disposition":'attachment; filename="factorypulse_maintenance_plan.csv"'})
+
+def require_public_https(value:str):
+    parsed=urlparse(value)
+    if parsed.scheme!="https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise HTTPException(422,"API地址必须是无账号信息的公开 HTTPS URL")
+    host=parsed.hostname.lower()
+    if host in ("localhost","localhost.localdomain") or host.endswith(".local") or host.endswith(".internal"):
+        raise HTTPException(422,"不允许配置内网或本机API地址")
+    try:
+        addresses=socket.getaddrinfo(host,parsed.port or 443,type=socket.SOCK_STREAM)
+        if not addresses: raise HTTPException(422,"无法解析API地址")
+        for record in addresses:
+            ip=ipaddress.ip_address(record[4][0])
+            if not ip.is_global: raise HTTPException(422,"不允许连接内网、保留地址或环回地址")
+    except socket.gaierror: raise HTTPException(422,"API地址DNS解析失败")
+
+class ChatInput(BaseModel):
+    question:str=Field(min_length=1,max_length=1000)
+@app.post("/api/copilot/chat")
+async def copilot_chat(inp:ChatInput):
+    base=settings_get("ai_base_url"); model=settings_get("ai_model")
+    if not base or not model or not _api_key: raise HTTPException(400,"请先在开发者设置中填写并保存API配置")
+    require_public_https(base)
+    summary=overview()
+    aggregate={"device_count":summary["metrics"]["total"],"high_risk_demo_count":summary["metrics"]["high"],"warning_demo_count":summary["metrics"]["warning"],"average_demo_risk":summary["metrics"]["avg_risk"],"record_counts":summary["counts"]}
+    instruction="你是FactoryPulse模拟数据助手。仅基于提供的汇总数据回答。风险评分来自模拟Excel，并非训练模型；不得编造设备故障、真实收益或维修因果结论。没有数据时明确说明。回答简洁中文。"
+    payload={"model":model,"messages":[{"role":"system","content":instruction+" 汇总："+json.dumps(aggregate,ensure_ascii=False)},{"role":"user","content":inp.question}],"max_tokens":500}
+    try:
+        async with httpx.AsyncClient(timeout=20,follow_redirects=False,trust_env=False) as client:
+            response=await client.post(base+"/chat/completions",headers={"Authorization":"Bearer "+_api_key},json=payload)
+        if response.status_code>=400: raise HTTPException(502,f"AI服务商返回 HTTP {response.status_code}")
+        content=response.json().get("choices",[{}])[0].get("message",{}).get("content","")
+        if not isinstance(content,str) or not content.strip(): raise HTTPException(502,"AI服务未返回可用文本")
+        return {"answer":content[:6000],"data_note":"仅发送设备数量、演示风险汇总与记录数量；未发送原始Excel设备/订单或维修人员记录"}
+    except (httpx.RequestError,ValueError,IndexError,KeyError) as e: raise HTTPException(502,"AI服务连接或响应解析失败")
