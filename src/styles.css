@@ -44,3 +44,8 @@
 .selected-detail>div:first-child{margin-right:auto}.selected-detail span{display:block;margin-top:6px;color:#98a0aa}
 .selected-detail b{color:#303b46;font-size:14px}.selected-detail button{display:flex;align-items:center;gap:7px;color:#ea580c;border:0;background:#ffedd5;padding:10px 12px;border-radius:8px;cursor:pointer}
 @media(max-width:760px){.selected-detail{gap:12px}.drop-zone{min-height:180px}}
+
+.risk-device-select{margin:8px 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#8b95a2;font-size:12px}
+.risk-chip{background:#fff;border:1px solid #e5e8ed;border-radius:30px;padding:7px 12px;font-size:11px;color:#67717d;cursor:pointer}
+.risk-chip:hover,.risk-chip.active{background:#fff2e8;color:#df681e;border-color:#fdba74}
+.recharts-bar-rectangle{cursor:pointer}
