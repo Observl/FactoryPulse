@@ -14,29 +14,28 @@ function Placeholder({message}:{message:string}) { return <div className="chart-
 
 export function EquipmentInsights({data}:{data:Overview}) {
  const {devices,counts}=data;
- const grouped=useMemo(()=> {
-   const lines=new Map<string,number>(); const states=new Map<string,number>();
-   for(const d of devices){ const line=d.production_line||"未分配";lines.set(line,(lines.get(line)||0)+1);const state=d.status||"未标注";states.set(state,(states.get(state)||0)+1); }
-   return {lines:[...lines].map(([name,count])=>({name,count})),states:[...states].map(([name,value])=>({name,value}))};
+ const chart=useMemo(()=>{
+  const lines=[...new Set(devices.map(d=>d.production_line||"未分配"))].sort();
+  const statuses=[...new Set(devices.map(d=>d.status||"未标注"))].sort();
+  return {statuses,data:lines.map(name=>{
+    const ds=devices.filter(d=>(d.production_line||"未分配")===name);
+    return {name,total:ds.length,...Object.fromEntries(statuses.map(status=>[status,ds.filter(d=>(d.status||"未标注")===status).length]))};
+  })};
  },[devices]);
  const types=new Set(devices.map(d=>d.equipment_type||"未知"));
  const withReadings=devices.filter(d=>toNum(d.latest_reading?.rotational_speed_rpm)!==null).length;
+ const statusColor=(status:string,index:number)=> /预警|告警|高风险|异常|故障|停机/.test(status)?"#f97316":/正常|运行/.test(status)?"#4e9c85":palette[(index+2)%palette.length];
  return <>
   <div className="metrics">
    <Stat label="设备总数" value={devices.length} desc="来自设备档案"/>
-   <Stat label="设备类型" value={types.size||0} desc="不同设备类别"/>
+   <Stat label="设备类型" value={types.size} desc="不同设备类别"/>
    <Stat label="有监测数据的设备" value={withReadings} desc="具有有效转速记录"/>
    <Stat label="运行监测记录" value={counts.readings||0} desc="Excel历史采样数量"/>
   </div>
-  <div className="content-grid">
-    <Panel title="各产线设备数量" note="设备档案统计">
-      {grouped.lines.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={grouped.lines}><CartesianGrid stroke="#eff1f4" vertical={false}/><XAxis dataKey="name" tick={{fontSize:11}}/><YAxis allowDecimals={false}/><Tooltip/><Bar dataKey="count" name="设备数" fill="#f97316" radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></div>:<Placeholder message="导入Excel后显示产线数据"/>}
-    </Panel>
-    <Panel title="设备状态构成" note="Excel状态字段">
-      {grouped.states.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={grouped.states} dataKey="value" nameKey="name" outerRadius={92} innerRadius={52} label={({name,percent})=>`${name} ${((percent||0)*100).toFixed(0)}%`}>{grouped.states.map((_,i)=><Cell key={i} fill={palette[i%palette.length]}/>)}</Pie><Tooltip/><Legend/></PieChart></ResponsiveContainer></div>:<Placeholder message="暂无设备状态数据"/>}
-    </Panel>
-  </div>
-  <p className="insight-note">图表仅展示已导入的设备档案，状态来自Excel字段，并非实时PLC连接状态。</p>
+  <Panel title="各产线设备状态分布" note="堆叠条形图 · 数量/状态合并">
+   {chart.data.length?<div className="insight-chart stacked-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart.data} layout="vertical" margin={{top:8,right:25,bottom:8,left:7}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={85} tick={{fontSize:12}}/><Tooltip formatter={(value,name)=>[Number(value).toFixed(0)+" 台",String(name)]}/><Legend/>{chart.statuses.map((status,i)=><Bar key={status} stackId="status" dataKey={status} name={status} fill={statusColor(status,i)} radius={0}/>)}</BarChart></ResponsiveContainer></div>:<Placeholder message="导入Excel后显示产线设备状态分布"/>}
+   <p className="insight-note">每条横柱代表一条产线，分块颜色代表Excel中的设备状态，各色块之和为该产线设备总数。</p>
+  </Panel>
  </>;
 }
 
@@ -45,7 +44,7 @@ export function RiskInsights({devices}:{devices:Device[]}) {
  const ranked=[...devices].sort((a,b)=>Number(b.risk_score)-Number(a.risk_score));
  const high=ranked.filter(d=>d.risk_score>=0.7).length,mid=ranked.filter(d=>d.risk_score>=0.4&&d.risk_score<0.7).length,low=ranked.filter(d=>d.risk_score<0.4).length;
  const dist=[{name:"低风险 (<40%)",value:low},{name:"中风险 (40–70%)",value:mid},{name:"高风险 (≥70%)",value:high}];
- const top=ranked.slice(0,8).map(d=>({name:d.equipment_id,risk:Math.round(d.risk_score*1000)/10}));
+ const top=ranked.slice(0,8).map(d=>({name:d.equipment_id,risk:Number((d.risk_score*100).toFixed(2))}));
  const selected=ranked.find(d=>d.equipment_id===focused);
  const averageRisk=devices.length?devices.reduce((total,d)=>total+d.risk_score,0)/devices.length*100:null;
  return <>
