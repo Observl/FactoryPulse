@@ -45,6 +45,7 @@ function validate(next:Tables){
  for(const k of ["readings","maintenance_rules","maintenance_history","orders","demo_risks"]){
   for(const row of next[k])if(!ids.has(String(row.equipment_id)))throw Error(names[k]+" 中存在未知设备编号："+String(row.equipment_id))
  }
+ if(new Set(next.demo_risks.map(r=>String(r.equipment_id))).size!==next.demo_risks.length)throw Error("风险评分表设备编号重复");
  for(const r of next.demo_risks)if(!Number.isFinite(Number(r.risk_score))||n(r.risk_score)<0||n(r.risk_score)>1)throw Error("风险评分必须为0至1的数值");
  for(const k of ["readings","maintenance_rules","staff","orders","scenarios"])if(!next[k].length)throw Error(names[k]+" 不可为空");
 }
@@ -78,7 +79,7 @@ function simulate(body:Record<string,unknown>){
  if(strategy==="optimized")candidates.sort((a,b)=>b.net_value/Math.max(b.cost,1)-a.net_value/Math.max(a.cost,1));
  else if(strategy==="risk_threshold")candidates.sort((a,b)=>b.risk-a.risk);
  else candidates.sort((a,b)=>a.equipment_id.localeCompare(b.equipment_id));
- let spent=0,elapsed=0;const selected=typeof candidates;
+ let spent=0,elapsed=0;
  const output:typeof candidates=[];
  for(const task of candidates){
   if(strategy==="risk_threshold"&&task.risk<threshold)continue;
