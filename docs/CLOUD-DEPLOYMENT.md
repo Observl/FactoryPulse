@@ -47,6 +47,16 @@ $env:FACTORYPULSE_IDENTITY_CONFIG=(Resolve-Path .secrets/identity.json).Path
 
 服务器需有 Docker Compose，域名 A/AAAA 记录指向服务器，并开放 80/443。将源码和受保护的 `.secrets` 文件分别传到服务器，不上传已有本地业务数据库或浏览器配置。
 
+Linux 上 Compose 的文件型 secrets 可能保留源文件权限。容器业务用户为 UID/GID 10001；上传后由服务器所有者设置 `.secrets` 目录仅自己可进入，机密文件组为 10001、权限 0640，使容器可读取但其他普通用户不可读取。使用 root 所有者部署时可执行：
+
+```sh
+sudo chown -R root:10001 .secrets
+sudo chmod 0700 .secrets
+sudo chmod 0640 .secrets/*
+```
+
+此后用 `sudo docker compose` 执行以下启动命令。不要为解决权限问题把机密文件设置为全员可读。
+
 ```sh
 cp deploy/cloud.env.example deploy/cloud.env
 # 编辑 FACTORYPULSE_DOMAIN 为实际域名，并设置 BUILD_COMMIT。

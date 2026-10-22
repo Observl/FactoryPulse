@@ -57,3 +57,20 @@ def test_auth_sql_round_trip_preserves_rows_and_versions(tmp_path):
         row=c.execute('SELECT * FROM auth_users WHERE user_id=?',('a',)).fetchone();assert row['password_hash']=='hash'
         c.execute('UPDATE auth_users SET version=version+1 WHERE user_id=?',('a',))
     assert store.snapshot()[1]['auth_users'][0]['version']==2
+
+def test_remote_outage_is_fail_closed_without_exposing_request(tmp_path,monkeypatch):
+    import httpx
+    token=tmp_path/'token';token.write_text('synthetic-private-token')
+    store=D1Store({'account_id':'a'*32,'database_id':'b'*36,'token_file':str(token)})
+    def fail(*args,**kwargs):raise httpx.ConnectError('synthetic-private-token')
+    monkeypatch.setattr(httpx,'post',fail)
+    with pytest.raises(HTTPException) as error:store.snapshot()
+    assert error.value.status_code==503 and 'synthetic-private-token' not in error.value.detail
+
+def test_d1_http_errors_never_echo_sql_or_hashes(tmp_path,monkeypatch):
+    import httpx
+    token=tmp_path/'token';token.write_text('synthetic-private-token')
+    store=D1Store({'account_id':'a'*32,'database_id':'b'*36,'token_file':str(token)})
+    monkeypatch.setattr(httpx,'post',lambda *a,**k:httpx.Response(403,json={'success':False,'errors':[{'message':'private-sql-and-hashes'}]}))
+    with pytest.raises(HTTPException) as error:store.snapshot()
+    assert error.value.status_code==503 and 'private-sql-and-hashes' not in error.value.detail
