@@ -17,6 +17,19 @@ def test_cloud_seed_refuses_to_overwrite_existing_local_account():
     with main.connect() as c:c.execute("INSERT INTO auth_users VALUES('local','local','Local','admin',NULL,'hash',1,1)")
     with pytest.raises(RuntimeError,match='不能覆盖'):initialize_accounts(main.connect,main._lock,'testprojects')
 
+def test_cloud_admin_id_does_not_overwrite_same_named_local_viewer(monkeypatch):
+    from backend.security import password_hash
+    from tests.test_api import client
+    initialize_accounts(main.connect,main._lock,'testprojects')
+    with main.connect() as c:
+        c.execute("INSERT INTO auth_users VALUES('existing-viewer','test','Existing viewer','viewer',NULL,?,1,1)",(password_hash('existing-viewer-password-123'),))
+    monkeypatch.setenv('FACTORYPULSE_DEPLOYMENT','cloud')
+    cloud=client.post('/api/auth/login',json={'username':'test','password':'testprojects'})
+    assert cloud.status_code==200 and cloud.json()['user']['user_id']=='test' and cloud.json()['user']['role']=='admin'
+    monkeypatch.delenv('FACTORYPULSE_DEPLOYMENT')
+    local=client.post('/api/auth/login',json={'username':'test','password':'existing-viewer-password-123'})
+    assert local.status_code==200 and local.json()['user']['user_id']=='existing-viewer' and local.json()['user']['role']=='viewer'
+
 def test_cloud_secret_roundtrip_and_wrong_key_failure(tmp_path,monkeypatch):
     key=tmp_path/'key';key.write_bytes(Fernet.generate_key());monkeypatch.setenv('FACTORYPULSE_CREDENTIAL_KEY_FILE',str(key))
     assert cloud_credentials.save_secret(tmp_path,'synthetic-test-value')

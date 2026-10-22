@@ -15,6 +15,10 @@ if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyCon
 if (-not $env:FACTORYPULSE_DATA_DIR) { $env:FACTORYPULSE_DATA_DIR = Join-Path $env:LOCALAPPDATA 'FactoryPulse\data' }
 $identityConfiguration = Join-Path $projectDirectory '.secrets\identity.json'
 if (-not $env:FACTORYPULSE_IDENTITY_CONFIG -and (Test-Path -LiteralPath $identityConfiguration)) { $env:FACTORYPULSE_IDENTITY_CONFIG = $identityConfiguration }
+$runtimeTemporaryDirectory = Join-Path $env:FACTORYPULSE_DATA_DIR 'tmp'
+New-Item -ItemType Directory -Path $runtimeTemporaryDirectory -Force | Out-Null
+$env:TEMP = $runtimeTemporaryDirectory
+$env:TMP = $runtimeTemporaryDirectory
 $env:FACTORYPULSE_SERVE_UI = '1'
 $env:FACTORYPULSE_UI_DIR = Join-Path $projectDirectory 'dist'
 $env:FACTORYPULSE_ALLOWED_ORIGINS = "http://127.0.0.1:$Port,http://localhost:$Port"

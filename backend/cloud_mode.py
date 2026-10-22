@@ -20,7 +20,7 @@ def initialize_accounts(connect,lock,password):
         if initialized:return
         if c.execute('SELECT 1 FROM auth_users LIMIT 1').fetchone():
             raise RuntimeError('云端首次启动必须使用独立数据库，不能覆盖已有本地账号')
-        c.execute('INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)',(ADMIN_ID,'test','线上测试员','admin',None,password_hash(password)))
+        c.execute('INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)',(ADMIN_ID,'线上测试员','线上测试员','admin',None,password_hash(password)))
         c.execute('INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)',(GUEST_ID,'cloud-viewer','只读访客','viewer',None,password_hash(secrets.token_urlsafe(48))))
         # The shared visitor account does not own a personal onboarding workflow.
         c.execute('INSERT INTO auth_onboarding VALUES (?,?,?)',(GUEST_ID,5,datetime.now(timezone.utc).isoformat()))

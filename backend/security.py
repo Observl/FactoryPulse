@@ -244,7 +244,9 @@ def install_auth(app,connect,lock):
             if recent and previous["attempts"]>=5: raise HTTPException(429,"尝试次数过多，请10分钟后重试")
             c.execute("INSERT OR REPLACE INTO auth_attempts VALUES (?,?,?)",(attempt,previous["attempts"]+1 if recent else 1,previous["window_start"] if recent else now.isoformat()))
             row=c.execute("SELECT * FROM auth_users WHERE username=?",(name,)).fetchone()
-            if not row and cloud_enabled():row=c.execute("SELECT * FROM auth_users WHERE user_id='test' AND lower(display_name)=?",(name,)).fetchone()
+            if cloud_enabled():
+                cloud_admin=c.execute("SELECT * FROM auth_users WHERE user_id='test' AND (user_id=? OR lower(display_name)=? OR username=?)",(name,name,name)).fetchone()
+                if cloud_admin:row=cloud_admin
         valid=verify_password(payload.password,row["password_hash"] if row else dummy)
         if not row or not row["active"] or not valid: raise HTTPException(401,"账号或密码不正确")
         with lock,connect() as c: c.execute("DELETE FROM auth_attempts WHERE attempt_key=?",(attempt,))

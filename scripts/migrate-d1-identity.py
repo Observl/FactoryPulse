@@ -21,9 +21,9 @@ def migrate(source,config_file,password_file):
     if not users:raise RuntimeError('源数据库中没有账号，未执行迁移')
     if not any(user['role']=='admin' and user['active'] for user in users):raise RuntimeError('源数据库缺少有效管理员')
     if not any(user['user_id']=='test' for user in users):
-        if any(user['username']=='test' for user in users):raise RuntimeError('test账号名已存在，需先人工核对')
+        if any(user['username']=='线上测试员' for user in users):raise RuntimeError('线上测试员登录名已存在，需先人工核对')
         password=password_file.read_text(encoding='utf-8').strip();validate_password(password)
-        users.append(dict(user_id='test',username='test',display_name='线上测试员',role='admin',staff_id=None,password_hash=password_hash(password),active=1,version=1))
+        users.append(dict(user_id='test',username='线上测试员',display_name='线上测试员',role='admin',staff_id=None,password_hash=password_hash(password),active=1,version=1))
     if not any(user['user_id']=='cloud-viewer' for user in users):
         import secrets
         users.append(dict(user_id='cloud-viewer',username='cloud-viewer',display_name='只读访客',role='viewer',staff_id=None,password_hash=password_hash(secrets.token_urlsafe(48)),active=1,version=1))
