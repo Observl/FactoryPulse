@@ -1,0 +1,7 @@
+{
+  "max_rounds": 4,
+  "max_calls_per_round": 5,
+  "max_tokens": 1200,
+  "total_timeout_seconds": 60,
+  "disabled_tools": []
+}

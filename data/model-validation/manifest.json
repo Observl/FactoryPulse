@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "dataset_id": "model-validation-v1-4141a127f218",
+  "origin": "SYNTHETIC_CNC_MODEL_VALIDATION_V1",
+  "anchor": "2026-10-21T00:00:00",
+  "sha256": "4141a127f218e19c11e3231e8f5c1910fb13426d9b14623fb645c89a9861a947",
+  "bytes": 23670873,
+  "purpose": "唯一最终软件验收集；合成数据，不证明现场效果",
+  "source": "outputs/adaptive-training-context/dataset.json"
+}

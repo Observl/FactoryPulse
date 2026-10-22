@@ -1,0 +1,334 @@
+[
+  {
+    "path": "data/smoke-import/factorypulse.sqlite3",
+    "bytes": 45056
+  },
+  {
+    "path": "data/smoke-metropt3/factorypulse.sqlite3",
+    "bytes": 18063360
+  },
+  {
+    "path": "outputs/workflow-proof-20261020T142306Z/factorypulse.sqlite3",
+    "bytes": 72560640
+  },
+  {
+    "path": "outputs/workflow-proof-20261020T142355Z/factorypulse.sqlite3",
+    "bytes": 72560640
+  },
+  {
+    "path": "outputs/workflow-proof-20261020T160324Z-cc48/factorypulse.sqlite3",
+    "bytes": 72560640
+  },
+  {
+    "path": "outputs/workflow-proof-20261020T160422Z-7f23/factorypulse.sqlite3",
+    "bytes": 72560640
+  },
+  {
+    "path": "outputs/workflow-proof-20261020T160615Z-fd0d/factorypulse.sqlite3",
+    "bytes": 91906048
+  },
+  {
+    "path": "outputs/workflow-proof-20261020T160726Z-454a/factorypulse.sqlite3",
+    "bytes": 80773120
+  },
+  {
+    "path": "outputs/workflow-proof-20261021T021327Z-a30f/factorypulse.sqlite3",
+    "bytes": 91910144
+  },
+  {
+    "path": "outputs/workflow-proof-20261021T023200Z-8abb/factorypulse.sqlite3",
+    "bytes": 91922432
+  },
+  {
+    "path": "outputs/workflow-proof-20261021T024158Z-1b84/factorypulse.sqlite3",
+    "bytes": 91926528
+  },
+  {
+    "path": "outputs/agent-expert-full-20261021/test_backup_status_does_not_cl1/factorypulse-20261021T141118Z-d3de11eb.sqlite3",
+    "bytes": 9
+  },
+  {
+    "path": "outputs/agent-expert-full-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/agent-expert-full-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/agent-expert-full-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/agent-expert-full-20261021/test_delivery_is_allowlisted_a0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/agent-expert-full-20261021/test_delivery_rejects_tampered0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/delivery-exercises/20261021T071548Z-e68abc0c/data/factorypulse.sqlite3",
+    "bytes": 188416
+  },
+  {
+    "path": "outputs/delivery-exercises/20261021T071953Z-05d3962c/data/factorypulse.sqlite3",
+    "bytes": 19542016
+  },
+  {
+    "path": "outputs/delivery-workflows/20261021T072238Z-3a3bc296/factorypulse.sqlite3",
+    "bytes": 20721664
+  },
+  {
+    "path": "outputs/local-deployment/20261021T030947Z-5ea3a1bd/data/factorypulse.sqlite3",
+    "bytes": 91926528
+  },
+  {
+    "path": "outputs/local-deployment/20261021T031331Z-27d333ea/data/factorypulse.sqlite3",
+    "bytes": 93097984
+  },
+  {
+    "path": "outputs/local-deployment/20261021T062438Z-c6b7ee72/data/factorypulse.sqlite3",
+    "bytes": 72560640
+  },
+  {
+    "path": "outputs/local-deployment/20261021T070228Z-9a8630f4/data/factorypulse.sqlite3",
+    "bytes": 72560640
+  },
+  {
+    "path": "outputs/model-validation-full-20261021/test_backup_status_does_not_cl1/factorypulse-20261021T145332Z-072e72a0.sqlite3",
+    "bytes": 9
+  },
+  {
+    "path": "outputs/model-validation-full-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/model-validation-full-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/model-validation-full-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/model-validation-full-20261021/test_delivery_is_allowlisted_a0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/model-validation-full-20261021/test_delivery_rejects_tampered0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/offline-install-exercises/20261021T134047Z-64eb758a/data/factorypulse.sqlite3",
+    "bytes": 18391040
+  },
+  {
+    "path": "outputs/offline-install-exercises/20261021T134047Z-64eb758a/verification/20261021T134602Z-7db58397/data/factorypulse.sqlite3",
+    "bytes": 19558400
+  },
+  {
+    "path": "outputs/pytest-approval-final-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-approval-receipts-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-backup-availability-20261021/test_backup_status_does_not_cl1/factorypulse-20261021T063638Z-62564db5.sqlite3",
+    "bytes": 9
+  },
+  {
+    "path": "outputs/pytest-backup-availability-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-backup-availability-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-backup-availability-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-backup-availability-final-20261021/test_backup_status_does_not_cl1/factorypulse-20261021T063739Z-fc1ca016.sqlite3",
+    "bytes": 9
+  },
+  {
+    "path": "outputs/pytest-backup-availability-final-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-backup-availability-final-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-backup-availability-final-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-delivery-final-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-delivery-final-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-delivery-final-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-delivery-package-20261021/test_delivery_is_allowlisted_a0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/pytest-delivery-package-20261021/test_delivery_rejects_tampered0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/pytest-delivery-package-final-20261021/test_delivery_is_allowlisted_a0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/pytest-delivery-package-final-20261021/test_delivery_rejects_tampered0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/pytest-evaluation-v8-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-execution-audit-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-execution-clearance-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-execution-clearance-final-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-field-profiles-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-future-label-20261021/test_backup_status_does_not_cl1/factorypulse-20261021T064320Z-e32ab4a1.sqlite3",
+    "bytes": 9
+  },
+  {
+    "path": "outputs/pytest-future-label-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-future-label-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-future-label-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-historical-review-20261021/test_backup_status_does_not_cl1/factorypulse-20261021T065109Z-65e4b568.sqlite3",
+    "bytes": 9
+  },
+  {
+    "path": "outputs/pytest-historical-review-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-historical-review-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-historical-review-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-import-race-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-import-race-final-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-import-race-final-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-import-race-final-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-import-sql-cancel-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-import-sql-cancel-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-import-sql-cancel-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-local-delivery-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-local-delivery-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-local-delivery-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-metro-cache-delivery-20261021/test_backup_status_does_not_cl1/factorypulse-20261021T071813Z-f086889b.sqlite3",
+    "bytes": 9
+  },
+  {
+    "path": "outputs/pytest-metro-cache-delivery-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/pytest-metro-cache-delivery-20261021/test_recovery_compares_setting0/backup.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-metro-cache-delivery-20261021/test_recovery_compares_setting0/restored.sqlite3",
+    "bytes": 17514496
+  },
+  {
+    "path": "outputs/pytest-metro-cache-delivery-20261021/test_delivery_is_allowlisted_a0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/pytest-metro-cache-delivery-20261021/test_delivery_rejects_tampered0/project/operator.sqlite3",
+    "bytes": 16
+  },
+  {
+    "path": "outputs/pytest-reliability-v7-20261021/test_missing_or_incomplete_dat0/incomplete.sqlite3",
+    "bytes": 8192
+  },
+  {
+    "path": "outputs/recovery-exercises/20261020T075923Z-09daa1cf/backup/factorypulse-20261020T075923Z-2595eabf.sqlite3",
+    "bytes": 50057216
+  },
+  {
+    "path": "outputs/recovery-exercises/20261020T075923Z-09daa1cf/restored/factorypulse.sqlite3",
+    "bytes": 50057216
+  },
+  {
+    "path": "outputs/recovery-exercises/20261021T030947Z-71f175a3/backup/factorypulse-20261021T030947Z-522e6cf1.sqlite3",
+    "bytes": 72560640
+  },
+  {
+    "path": "outputs/recovery-exercises/20261021T030947Z-71f175a3/restored/factorypulse.sqlite3",
+    "bytes": 72560640
+  }
+]

@@ -10,16 +10,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
       - run: npm run build
+      - run: npm run test:client
+      - run: node scripts/test-operational-tasks.mjs
   backend:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -r backend/requirements.txt pytest
+      - run: python -m pip install -r backend/requirements-test.lock.txt
       - run: python -m pytest -q
+      - run: python scripts/final-acceptance.py
         env:
           FACTORYPULSE_DATA_DIR: ${{ runner.temp }}/factorypulse-ci

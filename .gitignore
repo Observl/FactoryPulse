@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .venv/
+.factorypulse-install-incomplete
 __pycache__/
 *.pyc
 .env
@@ -8,3 +9,22 @@ __pycache__/
 !.env.example
 *.db
 *.sqlite3
+tests/.runtime*/
+tests/.smoke*/
+data/metropt3/metropt3.zip
+data/metropt3/raw/
+data/metropt3/factorypulse_records.json
+
+tests/factorypulse-tests-*/
+outputs/backups/
+
+# Runtime and caches are not source deliverables.
+outputs/final-runtime/
+.pnpm-store/
+.playwright-cli/
+*.log
+# Generated reports, packages and local browser profiles.
+outputs/
+.pytest_cache/
+*.sqlite3-*
+*.db-*

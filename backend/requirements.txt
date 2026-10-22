@@ -1,6 +1,11 @@
-fastapi>=0.115,<1
-uvicorn[standard]>=0.30,<1
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.30,<0.35
 pydantic>=2,<3
 python-multipart>=0.0.9
 openpyxl>=3.1
-httpx>=0.27,<1
+httpx>=0.27,<0.28
+xgboost>=2.1,<4
+shap>=0.46,<1
+numpy>=1.26,<3
+ortools>=9.11,<10
+keyring>=25,<26

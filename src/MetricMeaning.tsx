@@ -1,0 +1,5 @@
+import {metricMeaning} from "./metric-definitions";
+export {metricMeaning} from "./metric-definitions";
+const metricNames:Record<keyof typeof metricMeaning,string>={risk:"风险评分",precision:"精确率",recall:"召回率",f1:"F1 分数",false_alarm_rate:"误报率",lead:"平均提前量",event:"独立故障事件",test:"时间外测试",baseline:"规则基线",ewma:"工况趋势（EWMA）",shap:"特征归因（SHAP）",optimizer:"约束排程（CP-SAT）",coverage:"规则覆盖率",matched:"同窗对照",excluded:"不可评估窗口"};
+export function MetricMeaning({name}:{name:keyof typeof metricMeaning}){const item=metricMeaning[name];return <details className="metric-meaning"><summary>{metricNames[name]}</summary><p>{item.definition}</p><p>{item.example}</p><p><strong>对你的工作意味着：</strong>{item.impact}</p></details>}
+export function MetricsPrimer(){return <section className="panel metrics-primer"><div className="panel-heading"><h2>指标词典</h2><span>展开查看定义与示例</span></div><div className="meaning-grid">{(["risk","precision","recall","f1","false_alarm_rate","lead","event","test","baseline","ewma","shap","optimizer","coverage","matched","excluded"] as const).map(name=><MetricMeaning key={name} name={name}/>)}</div></section>}

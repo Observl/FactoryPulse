@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "temporal_features": true,
+  "max_candidates": 8,
+  "max_selected_features": 24,
+  "minimum_validation_gain": 0.01
+}

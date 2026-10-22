@@ -1,13 +1,15 @@
 {
   "name": "factorypulse",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "web": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "desktop": "electron ."
+    "test:client": "node scripts/test-api-client.mjs",
+    "desktop": "electron .",
+    "acceptance": ".venv\\Scripts\\python.exe scripts/final-acceptance.py"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
@@ -27,5 +29,6 @@
     "vite": "^6.0.0",
     "wait-on": "^8.0.1"
   },
-  "main": "electron/main.cjs"
+  "main": "electron/main.cjs",
+  "packageManager": "pnpm@11.25.0"
 }

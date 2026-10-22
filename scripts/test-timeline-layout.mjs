@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync(new URL('../src/timeline-layout.ts',import.meta.url),'utf8');
+const code=ts.transpileModule(source.replaceAll('export ',''),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+const context={Date};vm.createContext(context);vm.runInContext(code,context);
+const task=(id,start,end)=>({id,start_at:`2026-10-21T${start}:00`,end_at:`2026-10-21T${end}:00`});
+const adjacent=context.layoutIntervals([task('A','08:00','10:00'),task('B','10:00','12:00')]);
+assert.equal(adjacent.lanes,1);assert.equal(adjacent.items.some(item=>item.overlap),false);
+const overlap=context.layoutIntervals([task('A','08:00','11:00'),task('B','09:00','10:00'),task('C','09:30','12:00')]);
+assert.equal(overlap.lanes,3);assert.equal(overlap.items.every(item=>item.overlap),true);
+for(const a of overlap.items)for(const b of overlap.items)if(a.id!==b.id&&a.lane===b.lane)assert(a.end<=b.start||b.end<=a.start);
+const invalid=context.layoutIntervals([task('backward','12:00','10:00'),{id:'missing'},task('valid','10:00','11:00')]);
+assert.equal(invalid.invalid,2);assert.equal(invalid.items.length,1);
+console.log('Timeline interval checks passed: adjacency, overlap lanes, missing/reversed times; no browser.');
