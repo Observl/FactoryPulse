@@ -1,5 +1,7 @@
 """Final software acceptance uses one SHA-verified frozen dataset, in a disposable DB."""
 import os,tempfile,json,hashlib,sys,time
+for stream in (sys.stdout,sys.stderr):
+    if hasattr(stream,'reconfigure'):stream.reconfigure(encoding='utf-8')
 from pathlib import Path
 from datetime import datetime,timezone
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
