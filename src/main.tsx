@@ -4,15 +4,17 @@ import { createRoot } from "react-dom/client";
 
 import {AuthGate} from "./Auth";
 import {AppRecovery} from "./AppRecovery";
+import {runtimeMode} from './runtime-mode';
 import "./styles.css";
 import "./workflow-extensions.css";
 import "./ui-consistency.css";
 import "./workflow-polish.css";
 import "./pearl-glass.css";
 import "./button-system.css";
+import './cloud-login.css';
 
 async function start() {
-  if (import.meta.env.VITE_STATIC_DEMO === "true") {
+  if (runtimeMode === "cloud") {
     const {default:StaticReview}=await import("./StaticReview");
     createRoot(document.getElementById("root")!).render(<AppRecovery><AuthGate><StaticReview/></AuthGate></AppRecovery>);
     return;

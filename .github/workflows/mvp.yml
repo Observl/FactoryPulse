@@ -17,6 +17,7 @@ jobs:
       - run: node scripts/test-operational-tasks.mjs
       - run: node scripts/test-device-state.mjs
       - run: node scripts/test-device-sort.mjs
+      - run: node scripts/test-runtime-mode.mjs
   backend:
     runs-on: windows-latest
     env:

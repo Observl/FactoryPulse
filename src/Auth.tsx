@@ -5,6 +5,8 @@ import {useUnsavedChanges} from "./useUnsavedChanges";
 import {createContext,useCallback,useContext,useEffect,useRef,useState,type ReactNode} from "react";
 import {FirstLoginTutorial} from "./FirstLoginTutorial";
 import {apiRequest,errorMessage} from "./api";
+import {runtimeMode} from './runtime-mode';
+import {CloudAuthGate} from './CloudAuth';
 
 type User={user_id:string;username:string;display_name:string;role:string;staff_id?:string;version:number};
 export type Onboarding={step:number;completed_at:string|null;total_steps:number};
@@ -17,6 +19,10 @@ export const useAuth=()=>useContext(AuthContext);
 const post=(value:unknown):RequestInit=>({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(value)});
 
 export function AuthGate({children}:{children:ReactNode}){
+ if(runtimeMode==='cloud')return <CloudAuthGate>{(user,logout)=><AuthContext.Provider value={{required:true,setup_needed:false,mode:'cloud_demo',user,onboarding:{step:5,completed_at:'cloud-demo',total_steps:5},canManage:user.role==='admin',refresh:async()=>{},logout}}>{children}</AuthContext.Provider>}</CloudAuthGate>;
+ return <LocalAuthGate>{children}</LocalAuthGate>;
+}
+function LocalAuthGate({children}:{children:ReactNode}){
  const staticDemo=import.meta.env.VITE_STATIC_DEMO==="true";
  const [authorizedIdentity,setAuthorizedIdentity]=useState("local"),[status,setStatus]=useState<Status>(initial),[ready,setReady]=useState(false),[everAuthorized,setEverAuthorized]=useState(false),[error,setError]=useState("");
  const generation=useRef(0);
@@ -26,7 +32,7 @@ export function AuthGate({children}:{children:ReactNode}){
  const locked=!ready||!!error||!status.user;
  const tutorial=!locked&&!!status.user&&!status.onboarding?.completed_at;
  const value={...status,canManage:!!status.user&&["admin","manager"].includes(status.user.role),refresh,logout};
- return <AuthContext.Provider value={value}>{everAuthorized&&!locked&&!tutorial&&<div key={authorizedIdentity}>{children}</div>}{tutorial&&status.user&&<FirstLoginTutorial key={status.user.user_id} user={status.user} progress={status.onboarding||{step:0,completed_at:null,total_steps:5}} onCompleted={refresh} onLogout={logout}/>} {locked&&<main className="auth-frame"><section className="panel"><h1>FactoryPulse</h1>{!ready?<p role="status">正在连接设备管理服务…</p>:error?<><p className="alert error" role="alert">{staticDemo?"此页面需要连接账号服务。请打开本地服务版并登录管理账号。":error}</p><Button className="primary" onClick={()=>void refresh()}>重新连接</Button></>:<LoginForm setup={status.setup_needed} onLoggedIn={refresh}/>}</section></main>}</AuthContext.Provider>;
+ return <AuthContext.Provider value={value}>{everAuthorized&&!locked&&!tutorial&&<div key={authorizedIdentity}>{children}</div>}{tutorial&&status.user&&<FirstLoginTutorial key={status.user.user_id} user={status.user} progress={status.onboarding||{step:0,completed_at:null,total_steps:5}} onCompleted={refresh} onLogout={logout}/>} {locked&&<main className="auth-frame"><section className="panel"><h1>FactoryPulse</h1><p className="hint">本地服务版 · 使用本机账号登录</p>{!ready?<p role="status">正在连接设备管理服务…</p>:error?<><p className="alert error" role="alert">{staticDemo?"此页面需要连接账号服务。请打开本地服务版并登录管理账号。":error}</p><Button className="primary" onClick={()=>void refresh()}>重新连接</Button></>:<LoginForm setup={status.setup_needed} onLoggedIn={refresh}/>}</section></main>}</AuthContext.Provider>;
 }
 
 function LoginForm({setup,onLoggedIn}:{setup:boolean;onLoggedIn:()=>Promise<void>}){

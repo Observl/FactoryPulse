@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+const source=(await readFile(new URL('../src/runtime-mode.ts',import.meta.url),'utf8')).split('export const runtimeMode=')[0];
+const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const {detectRuntime}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
+assert.equal(detectRuntime(false,'127.0.0.1'),'local');
+assert.equal(detectRuntime(false,'localhost'),'local');
+assert.equal(detectRuntime(false,'192.168.1.10'),'local');
+assert.equal(detectRuntime(false,'observl.github.io'),'cloud');
+assert.equal(detectRuntime(true,'localhost'),'cloud');
+assert.equal(detectRuntime(false,'example.com'),'local');
+console.log('6 runtime routing checks passed');
