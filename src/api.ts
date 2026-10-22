@@ -36,6 +36,9 @@ export class ApiError extends Error{
  constructor(message:string,public status:number){super(message);this.name="ApiError"}
 }
 
+// Deployment address only: the same application and API contract run everywhere.
+const apiBase=(import.meta.env?.VITE_API_BASE_URL||"/api").replace(/\/$/,"");
+
 export async function apiRequest(path:string,options:RequestInit={},timeoutMs?:number){
  const write=!!options.method&&options.method.toUpperCase()!=="GET";
  const controller=new AbortController();let timedOut=false;
@@ -44,7 +47,7 @@ export async function apiRequest(path:string,options:RequestInit={},timeoutMs?:n
  options.signal?.addEventListener("abort",cancel,{once:true});
  const timer=window.setTimeout(()=>{timedOut=true;controller.abort()},timeoutMs??(write?90000:30000));
  try{
-  const response=await fetch("/api"+path,{...options,cache:options.cache||"no-store",signal:controller.signal});
+  const response=await fetch(apiBase+path,{...options,credentials:"include",cache:options.cache||"no-store",signal:controller.signal});
   let body:unknown;
   try{body=await response.json()}catch{throw new ApiError(write?"服务没有返回可识别的结果。操作可能已提交，请先刷新记录确认。":"服务没有返回有效数据，请确认后端服务正在运行。",response.status)}
   if(response.status===401&&!path.startsWith("/auth/")&&typeof window.dispatchEvent==="function")window.dispatchEvent(new CustomEvent("factorypulse:auth-expired"));

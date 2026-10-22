@@ -1,0 +1,14 @@
+{
+  "name": "factorypulse",
+  "main": "identity/worker.mjs",
+  "compatibility_date": "2026-08-06",
+  "workers_dev": true,
+  "assets": {
+    "directory": "../dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [{"binding":"DB","database_name":"factorypulse_users","database_id":"af5776ef-c7f8-48c7-8f21-1bb36f98061c"}],
+  "vars": {"ALLOWED_ORIGINS":"https://factorypulse.griffonage2077.workers.dev,https://observl.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://localhost:8000"}
+}

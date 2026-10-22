@@ -1,0 +1,68 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+import {Miniflare} from 'miniflare';
+const origin='https://observl.github.io',ownerPassword='isolated-worker-owner-2026',viewerPassword='isolated-worker-viewer-2026';
+const digest=value=>createHash('sha256').update(value).digest('hex');
+const mf=new Miniflare({modules:true,scriptPath:new URL('./worker.mjs',import.meta.url).pathname.replace(/^\/([A-Za-z]:)/,'$1'),compatibilityDate:'2026-08-06',d1Databases:{DB:'test-identities'},bindings:{ALLOWED_ORIGINS:origin,GUEST_USER_ID:'10002'},serviceBindings:{ASSETS:async()=>new Response('<html>Full dashboard asset</html>',{headers:{'Content-Type':'text/html'}})}});
+let checks=0,jar='';
+async function call(path,method='GET',value,options={}){
+ const headers={Origin:origin,...(jar?{Cookie:jar}:{}),...(value===undefined?{}:{'Content-Type':'application/json'}),...options.headers};
+ if(options.noOrigin)delete headers.Origin;
+ const response=await mf.dispatchFetch('https://identity.test/api'+path,{method,headers,...(value===undefined?{}:{body:JSON.stringify(value)})});
+ const cookie=response.headers.get('Set-Cookie');if(cookie)jar=cookie.split(';')[0];
+ const body=response.status===204?null:await response.json();return {response,body,cookie};
+}
+function status(value,expected){checks++;assert.equal(value.response.status,expected,JSON.stringify(value.body));return value}
+try{
+ const db=await mf.getD1Database('DB');
+ const schema=await readFile(new URL('../../deploy/d1-identity-schema.sql',import.meta.url),'utf8');
+ for(const sql of schema.split(';').filter(x=>x.trim()))await db.prepare(sql).run();
+ await db.prepare('INSERT INTO auth_users(user_id,display_name,role,staff_id,password_hash) VALUES (10001,?,?,0,?)').bind('Owner','开发者',digest(ownerPassword)).run();
+ const page=await mf.dispatchFetch('https://identity.test/');assert.equal(page.status,200);assert.match(await page.text(),/Full dashboard asset/);checks++;
+ status(await call('/health'),200);
+ const initial=status(await call('/auth/status'),200);assert.equal(initial.body.user,null);assert.equal(initial.body.guest_available,false);
+ status(await call('/overview'),401);
+ status(await call('/auth/login','POST',{username:'10001',password:ownerPassword},{headers:{Origin:'https://untrusted.invalid'}}),403);
+ status(await call('/auth/login','POST',{username:'10001',password:ownerPassword},{noOrigin:true}),403);
+ status(await call('/auth/login','POST',{username:'10001',password:'wrong-password'}),401);
+ const signed=status(await call('/auth/login','POST',{username:'10001',password:ownerPassword}),200);
+ assert.match(signed.cookie,/HttpOnly/);assert.match(signed.cookie,/Secure/);assert.match(signed.cookie,/Partitioned/);assert.match(signed.cookie,/SameSite=None/);
+ assert.equal(signed.response.headers.get('Access-Control-Allow-Origin'),origin);assert.equal(signed.response.headers.get('Access-Control-Allow-Credentials'),'true');
+ assert.equal(signed.body.user.user_id,'10001');assert.equal(signed.body.user.role,'developer');assert.ok(!JSON.stringify(signed.body).includes('password_hash'));
+ const stored=await db.prepare('SELECT token_hash FROM auth_sessions').first();assert.equal(stored.token_hash,digest(jar.split('=')[1]));
+ status(await call('/auth/onboarding','POST',{step:5}),409);
+ for(let step=1;step<=5;step++)status(await call('/auth/onboarding','POST',{step}),200);
+ assert.ok(status(await call('/auth/status'),200).body.onboarding.completed_at);
+ status(await call('/auth/users/10001','POST',{display_name:'Owner',role:'viewer',staff_id:1,active:false,version:1}),409);
+ status(await call('/auth/users','POST',{display_name:'Invalid',role:'user',staff_id:0,password:viewerPassword}),422);
+ const viewer=status(await call('/auth/users','POST',{display_name:'Viewer',role:'viewer',staff_id:1,password:viewerPassword}),200);assert.equal(viewer.body.user_id,'10002');
+ const normal=status(await call('/auth/users','POST',{display_name:'Normal',role:'user',staff_id:2,password:viewerPassword}),200);assert.equal(normal.body.user_id,'10003');
+ const list=status(await call('/auth/users'),200);assert.equal(list.body.records.length,3);assert.ok(!JSON.stringify(list.body).includes('password_hash'));
+ const row=await db.prepare('SELECT * FROM auth_users WHERE user_id=10003').first();assert.equal(row.role,'普通用户');assert.equal(row.staff_id,2);assert.equal(row.password_hash,digest(viewerPassword));assert.ok(!('username' in row));
+ status(await call('/auth/profile','POST',{display_name:'Owner renamed',version:1}),200);
+ status(await call('/auth/profile','POST',{display_name:'Conflict',version:1}),409);
+ status(await call('/overview'),503);
+ const developerJar=jar;
+ status(await call('/auth/logout','POST'),200);assert.equal(status(await call('/auth/status'),200).body.user,null);
+ status(await call('/auth/guest','POST'),200);assert.equal(status(await call('/auth/status'),200).body.user.role,'viewer');
+ status(await call('/auth/users'),403);
+ status(await call('/auth/password','POST',{current_password:viewerPassword,new_password:'isolated-worker-new-2026'}),403);
+ status(await call('/auth/logout','POST'),200);
+ status(await call('/auth/login','POST',{username:'10003',password:viewerPassword}),200);
+ status(await call('/auth/users','POST',{display_name:'Denied',role:'developer',staff_id:0,password:viewerPassword}),403);
+ status(await call('/auth/password','POST',{current_password:'wrong-password',new_password:'isolated-worker-new-2026'}),422);
+ status(await call('/auth/password','POST',{current_password:viewerPassword,new_password:'isolated-worker-new-2026'}),200);
+ assert.equal(status(await call('/auth/status'),200).body.user,null);
+ status(await call('/auth/login','POST',{username:'10003',password:viewerPassword}),401);
+ status(await call('/auth/login','POST',{username:'10003',password:'isolated-worker-new-2026'}),200);
+ const oldUserJar=jar;
+ status(await call('/auth/login','POST',{username:'10001',password:ownerPassword}),200);
+ status(await call('/auth/users/10003','POST',{display_name:'Normal',role:'user',staff_id:2,active:false,version:2}),200);
+ jar=oldUserJar;assert.equal(status(await call('/auth/status'),200).body.user,null);
+ status(await call('/auth/login','POST',{username:'10003',password:'isolated-worker-new-2026'}),401);
+ for(let i=0;i<5;i++)status(await call('/auth/login','POST',{username:'99999',password:viewerPassword}),401);
+ status(await call('/auth/login','POST',{username:'99999',password:viewerPassword}),429);
+ const options=await mf.dispatchFetch('https://identity.test/api/auth/status',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type'}});assert.equal(options.status,204);
+ console.log(`${checks} Worker/D1 checks passed: real sessions, ID allocation, roles, onboarding, password changes, disabled accounts, CORS and rate limits.`);
+}finally{await mf.dispose()}

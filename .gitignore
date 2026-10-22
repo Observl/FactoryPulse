@@ -29,3 +29,4 @@ outputs/
 *.sqlite3-*
 *.db-*
 .secrets/
+.wrangler/

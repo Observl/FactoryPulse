@@ -26,4 +26,11 @@ globalThis.fetch=async(_url,options)=>new Promise((_resolve,reject)=>options.sig
 await assert.rejects(apiRequest('/overview',{},1),/读取超时/);
 globalThis.fetch=async()=>({ok:false,status:409,json:async()=>({detail:'记录版本已改变，请刷新'})});
 await assert.rejects(apiRequest('/work-orders/example/approval',{method:'POST'}),/记录版本已改变/);
-console.log('8 API failure-handling checks passed (mocked transport; no browser/network).');
+let target,credentials;
+globalThis.fetch=async(url,options)=>{target=url;credentials=options.credentials;return {ok:true,status:200,json:async()=>({success:true})}};
+await apiRequest('/auth/status');assert.equal(target,'/api/auth/status');assert.equal(credentials,'include');
+const remoteSource=source.replace('import.meta.env?.VITE_API_BASE_URL','"https://identity.example/api"');
+const remoteCompiled=ts.transpileModule(remoteSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const remote=await import('data:text/javascript;base64,'+Buffer.from(remoteCompiled).toString('base64'));
+await remote.apiRequest('/auth/status');assert.equal(target,'https://identity.example/api/auth/status');assert.equal(credentials,'include');
+console.log('10 API checks passed: failure handling, local routing and credentialed remote routing (mocked transport).');

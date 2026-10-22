@@ -150,4 +150,4 @@ docs/                   操作、设计、模型边界与验收说明
 
 服务端必须配置 `FACTORYPULSE_IDENTITY_CONFIG` 指向私有 D1 配置文件，或使用项目 `.secrets/identity.json`。正常启动未配置时直接拒绝启动，不回退到本机账号。令牌只存在服务端机密文件，不能进入仓库或浏览器。
 
-GitHub Pages 发布相同的完整前端；它无法运行 Python、模型计算和业务数据库。完整可运行部署使用仓库 Docker/Caddy 方案，在服务器上同时运行界面和 API。尚未提供服务器时，Pages 单独无法完成登录和业务处理，D1 不能替代业务服务。配置与启动方法见 [完整服务部署](docs/CLOUD-DEPLOYMENT.md)。
+完整网站现托管于 [Cloudflare](https://factorypulse.griffonage2077.workers.dev)，页面与真实账号接口同源并绑定现有 D1，支持编号登录、退出、改密和账号管理。GitHub Pages 保留相同前端的镜像。连接方式见 [Cloudflare 账号服务](docs/CLOUDFLARE-IDENTITY.md)。设备数据、模型计算和维修业务仍需 Python 服务器；未配置时明确提示，不以模拟数据代替。完整业务部署见 [完整服务部署](docs/CLOUD-DEPLOYMENT.md)。
