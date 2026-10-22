@@ -126,10 +126,11 @@ def install_auth(app,connect,lock):
     from .d1_identity import wrap_connection,configuration as identity_configuration
     from .cloud_mode import enabled as cloud_enabled,GUEST_ID
     connect=wrap_connection(connect)
+    identity_configured=bool(identity_configuration())
     dummy=password_hash("timing-comparison-only-not-an-account")
     def required():
         with connect() as c:
-            return bool(identity_configuration()) or cloud_enabled() or os.environ.get("FACTORYPULSE_TEST_ALLOW_ANONYMOUS")!="1" or os.environ.get("FACTORYPULSE_AUTH_REQUIRED")=="1" or bool(c.execute("SELECT 1 FROM auth_users LIMIT 1").fetchone())
+            return bool(identity_configured) or cloud_enabled() or os.environ.get("FACTORYPULSE_TEST_ALLOW_ANONYMOUS")!="1" or os.environ.get("FACTORYPULSE_AUTH_REQUIRED")=="1" or bool(c.execute("SELECT 1 FROM auth_users LIMIT 1").fetchone())
 
     def find_user(request):
         token=request.cookies.get(COOKIE)
@@ -213,11 +214,11 @@ def install_auth(app,connect,lock):
                 row=c.execute("SELECT step,completed_at FROM auth_onboarding WHERE user_id=?",(user["user_id"],)).fetchone()
             onboarding={"step":row["step"] if row else 0,"completed_at":row["completed_at"] if row else None,"total_steps":ONBOARDING_STEPS}
         with connect() as c:guest_exists=c.execute("SELECT 1 FROM auth_users WHERE user_id=? AND role='viewer' AND active=1",(GUEST_ID,)).fetchone() if GUEST_ID else None
-        return {"required":required(),"setup_needed":not exists,"mode":"accounts" if required() else "local_single_operator","guest_available":bool(GUEST_ID) and bool(guest_exists),"identity_provider":"cloudflare_d1" if identity_configuration() else "sqlite","user":user,"onboarding":onboarding}
+        return {"required":required(),"setup_needed":not exists,"mode":"accounts" if required() else "local_single_operator","guest_available":bool(GUEST_ID) and bool(guest_exists),"identity_provider":"cloudflare_d1" if identity_configured else "sqlite","user":user,"onboarding":onboarding}
 
     @app.post('/api/auth/guest')
     def guest_login(request:Request):
-        if not identity_configuration() and not cloud_enabled():raise HTTPException(404,'未配置集中访客账号')
+        if not identity_configured and not cloud_enabled():raise HTTPException(404,'未配置集中访客账号')
         with connect() as c:
             row=c.execute("SELECT * FROM auth_users WHERE user_id=? AND role='viewer' AND active=1",(GUEST_ID,)).fetchone()
         if not row:raise HTTPException(503,'访客账号尚未配置')
@@ -243,7 +244,7 @@ def install_auth(app,connect,lock):
 
     @app.post("/api/auth/bootstrap")
     def bootstrap(payload:BootstrapInput,request:Request):
-        if cloud_enabled() or identity_configuration():raise HTTPException(403,'集中账号中心需由部署管理员初始化')
+        if cloud_enabled() or identity_configured:raise HTTPException(403,'集中账号中心需由部署管理员初始化')
         if not request.client or request.client.host not in {"127.0.0.1","::1","localhost"}: raise HTTPException(403,"首次管理员必须在服务所在电脑上初始化")
         name=username(payload.username);validate_password(payload.password)
         if not payload.display_name.strip(): raise HTTPException(422,"请填写管理员姓名")
@@ -314,7 +315,7 @@ def install_auth(app,connect,lock):
         user=principal()
         if not user: raise HTTPException(401,"请先登录")
         if user["role"] not in {"developer","admin"}: raise HTTPException(403,"当前角色不能修改账号名称")
-        name=str(user["user_id"]) if identity_configuration() else username(payload.username);display=payload.display_name.strip()
+        name=str(user["user_id"]) if identity_configured else username(payload.username);display=payload.display_name.strip()
         if not display: raise HTTPException(422,"名称不能全部为空格")
         with lock,connect() as c:
             c.execute("BEGIN IMMEDIATE")
@@ -341,7 +342,7 @@ def install_auth(app,connect,lock):
             c.execute("BEGIN IMMEDIATE");staff_id=validate_role(c,payload.role,payload.staff_id)
             if c.execute("SELECT 1 FROM auth_users WHERE username=?",(name,)).fetchone(): raise HTTPException(409,"账号名已存在")
             identifier=next_user_id(c)
-            name=identifier if identity_configuration() else name or identifier
+            name=identifier if identity_configured else name or identifier
             c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",(identifier,name,payload.display_name.strip(),payload.role,staff_id,encoded))
             c.execute("INSERT INTO audit_events(event_type,entity_id,content,created_at) VALUES (?,?,?,?)",("auth_user_created",identifier,json.dumps({"username":name,"role":payload.role,**actor_metadata()},ensure_ascii=False),datetime.now(timezone.utc).isoformat()))
         return {"success":True,"user_id":identifier}
