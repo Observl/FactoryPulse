@@ -43,8 +43,15 @@ class Context(Arguments):
 class Flow(Arguments):
     work_order_id: Text
 
+class Change(Arguments):
+    kind: Literal["equipment", "staff", "orders", "scenarios"]
+    identifier: Text
+    values: dict
+    reason: Note
+
 # name: (argument model, description, creates a draft)
 REGISTRY = {
+    "request_change": (Change, "申请修改现有设备名称/类型、人员班次、订单时间表或情景参数。values须提供资源完整可编辑字段；先查询资源。仅生成权限请求，不直接执行。", True),
     "equipment": (Equipment, "查询指定设备风险及工况；无编号时仅返回风险前十，不代表全厂完整清单", False),
     "history": (History, "查询指定设备时序、维修记录；分析复发与趋势须先读取", False),
     "evaluation": (Arguments, "读取时间外评估、真实故障数量及证据限制；分数不是概率", False),

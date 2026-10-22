@@ -11,6 +11,12 @@ class AgentConfig(BaseModel):
     max_tokens: int = Field(default=1200, ge=256, le=2400)
     total_timeout_seconds: int = Field(default=60, ge=5, le=90)
     disabled_tools: list[str] = Field(default_factory=list)
+    tool_timeout_seconds: int = Field(default=15, ge=1, le=60)
+    read_retries: int = Field(default=1, ge=0, le=2)
+    max_input_tokens: int = Field(default=32000, ge=2000, le=64000)
+    max_run_cost_usd: float = Field(default=0.50, gt=0, le=100)
+    input_usd_per_million: float = Field(default=10, ge=0, le=1000)
+    output_usd_per_million: float = Field(default=30, ge=0, le=1000)
 
     @field_validator("disabled_tools")
     @classmethod

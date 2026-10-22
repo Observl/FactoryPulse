@@ -28,6 +28,14 @@ t=time.perf_counter();call('GET','/api/overview');warm=time.perf_counter()-t
 quality=call('GET','/api/data-quality');evaluation=call('GET','/api/model/evaluation')
 e=evaluation['evaluation'];assert e['synthetic_validation_only'] and e['test_rows']>0
 assert all(d['risk_score']==d['model_risk'] for d in overview['devices'])
+for device in overview['devices']:
+ details=device['scoring_details'];model=details['model'];trend=details['trend']
+ assert model and abs(model['reconstructed_score']-model['model_output'])<.000002
+ assert abs(model['reconstructed_score']-device['model_risk'])<.000051
+ assert details['rule']['matches_stored']
+ if trend.get('score') is not None:assert round(min(trend['deviation']/trend['baseline']/6,1),4)==trend['score']
+check('逐设备评分复算','全部设备的规则、EWMA与模型贡献转换均与显示分数核对一致')
+
 assert e['adaptive_training']['validation_stability']['status']=='reserved_not_used_for_selection'
 check('验证稳定性段','后段验证数据未参与候选或阈值选择，且与选择段隔离168小时')
 check('评分评估一致','当前风险排序直接使用模型分数；规则与趋势不融合')

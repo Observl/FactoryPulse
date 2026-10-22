@@ -13,7 +13,7 @@ export default defineConfig(({mode})=>{
    const directory=resolve(options.dir||"dist");
    const collect=(folder:string):string[]=>readdirSync(folder,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?collect(resolve(folder,entry.name)):[resolve(folder,entry.name)]);
    const files=collect(directory).filter(file=>!file.endsWith("factorypulse-build.json")).map(file=>{const data=readFileSync(file);return {path:relative(directory,file).split("\\").join("/"),size:data.length,sha256:createHash("sha256").update(data).digest("hex")}});
-   writeFileSync(resolve(directory,"factorypulse-build.json"),JSON.stringify({schema_version:1,app:"FactoryPulse",version,build_mode:demo?"static_demo":"local_service",generated_at:new Date().toISOString(),api_prefix:"/api",asset_base:demo?"/FactoryPulse/":"/",files},null,2));
+   writeFileSync(resolve(directory,"factorypulse-build.json"),JSON.stringify({schema_version:1,app:"FactoryPulse",version,commit:process.env.VITE_BUILD_COMMIT||null,build_mode:demo?"static_demo":"local_service",generated_at:new Date().toISOString(),api_prefix:"/api",asset_base:demo?"/FactoryPulse/":"/",files},null,2));
   }
  }],server:{port:5173,strictPort:true,proxy:{"/api":process.env.FACTORYPULSE_API_TARGET||"http://127.0.0.1:8000"}}};
 });

@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+const source=fs.readFileSync(new URL('../src/device-state.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2020}}).outputText;
+const {deviceState}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+assert.equal(deviceState({status:'运行中'}).kind,'normal');
+assert.equal(deviceState({status:'预警'}).kind,'warning');
+assert.equal(deviceState({status:'故障'}).kind,'fault');
+assert.equal(deviceState({status:'未启动'}).kind,'offline');
+assert.equal(deviceState({status:'运行中',latest_reading:{failure:1}}).kind,'fault');
+assert.equal(deviceState({status:'运行中',review_required:true}).kind,'warning');
+assert.equal(deviceState({status:'停机',review_required:true}).kind,'offline');
+assert.equal(deviceState({}).kind,'unknown');
+console.log('8 equipment state checks passed.');

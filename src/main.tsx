@@ -1,3 +1,4 @@
+import {Button} from "./components/Button";
 import React from "react";
 import { createRoot } from "react-dom/client";
 
@@ -8,6 +9,7 @@ import "./workflow-extensions.css";
 import "./ui-consistency.css";
 import "./workflow-polish.css";
 import "./pearl-glass.css";
+import "./button-system.css";
 
 async function start() {
   if (import.meta.env.VITE_STATIC_DEMO === "true") {
@@ -21,5 +23,5 @@ async function start() {
 void start().catch(()=>{
  const root=document.getElementById("root");
  if(!root)return;
- createRoot(root).render(<main className="auth-frame"><section className="panel" role="alert"><h1>工具启动未完成</h1><p>请确认应用文件完整，再重新载入。重复出现时联系管理员处理。</p><button className="primary" onClick={()=>window.location.reload()}>重新载入</button></section></main>);
+ createRoot(root).render(<main className="auth-frame"><section className="panel" role="alert"><h1>工具启动未完成</h1><p>请确认应用文件完整，再重新载入。重复出现时联系管理员处理。</p><Button className="primary" onClick={()=>window.location.reload()}>重新载入</Button></section></main>);
 });

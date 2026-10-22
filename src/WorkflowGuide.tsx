@@ -1,3 +1,4 @@
+import {Button} from "./components/Button";
 import {ArrowRight,Check,ChevronRight} from "lucide-react";
 
 type Step={page:string;title:string;detail:string;state:string;done:boolean};
@@ -12,10 +13,10 @@ export function WorkflowGuide({page,hasData,hasPlan,onNavigate}:{page:string;has
  ];
  return <section className="workflow-guide" aria-labelledby="workflow-title">
   <div className="workflow-heading"><div><span className="workflow-kicker">标准操作流程</span><h2 id="workflow-title">从数据到维护执行</h2></div><p>按顺序完成复核与审批；模型评分只用于排序，最终决策由人员确认。</p></div>
-  <div className="workflow-steps">{steps.map((step,index)=><button type="button" key={step.title} className={"workflow-step"+(page===step.page?" current":"")+(step.done?" completed":"")} onClick={()=>onNavigate(step.page)} aria-current={page===step.page?"step":undefined}>
+  <div className="workflow-steps">{steps.map((step,index)=><Button type="button" key={step.title} className={"workflow-step"+(page===step.page?" current":"")+(step.done?" completed":"")} onClick={()=>onNavigate(step.page)} aria-current={page===step.page?"step":undefined}>
    <span className="workflow-number" aria-hidden="true">{step.done?<Check size={15}/>:String(index+1).padStart(2,"0")}</span>
    <span className="workflow-copy"><strong>{step.title}</strong><small>{step.detail}</small><em>{step.state}</em></span>
    {index<steps.length-1?<ChevronRight className="workflow-chevron" size={16} aria-hidden="true"/>:<ArrowRight className="workflow-chevron" size={16} aria-hidden="true"/>}
-  </button>)}</div>
+  </Button>)}</div>
  </section>
 }

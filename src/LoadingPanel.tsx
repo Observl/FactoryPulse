@@ -1,0 +1,3 @@
+export function LoadingPanel({title='正在载入',fields=['设备数量','待处理事项','数据记录','更新时间'],columns=['项目','状态','时间','操作']}:{title?:string;fields?:string[];columns?:string[]}){
+ return <section className="panel loading-panel" aria-busy="true"><h2>{title}</h2><div className="compact-stats">{fields.map(field=><div key={field}><span>{field}</span><strong>--</strong></div>)}</div><div className="table-scroll"><table><thead><tr>{columns.map(column=><th key={column}>{column}</th>)}</tr></thead><tbody><tr>{columns.map(column=><td key={column}>--</td>)}</tr></tbody></table></div><p className="hint" role="status">正在计算，未就绪的数据以 -- 显示。</p></section>;
+}

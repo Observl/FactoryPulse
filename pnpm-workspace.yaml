@@ -1,0 +1,4 @@
+# Explicit dependency build policy for pnpm 11; do not approve arbitrary scripts.
+allowBuilds:
+  esbuild: true
+  electron: true

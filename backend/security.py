@@ -98,6 +98,13 @@ class PasswordChange(BaseModel):
     new_password:str=Field(max_length=256)
 
 
+class ProfileUpdate(BaseModel):
+    model_config={"extra":"forbid"}
+    username:str=Field(min_length=1,max_length=60)
+    display_name:str=Field(min_length=1,max_length=100)
+    version:int=Field(ge=1)
+
+
 class UserInput(BootstrapInput):
     role:str
     staff_id:str|None=None
@@ -261,6 +268,23 @@ def install_auth(app,connect,lock):
         response.delete_cookie(COOKIE,path="/")
         return response
 
+    @app.post("/api/auth/profile")
+    def update_profile(payload:ProfileUpdate):
+        user=principal()
+        if not user: raise HTTPException(401,"请先登录")
+        if user["role"] not in {"admin","manager"}: raise HTTPException(403,"当前角色不能修改账号名称")
+        name=username(payload.username);display=payload.display_name.strip()
+        if not display: raise HTTPException(422,"名称不能全部为空格")
+        with lock,connect() as c:
+            c.execute("BEGIN IMMEDIATE")
+            old=c.execute("SELECT * FROM auth_users WHERE user_id=? AND active=1",(user["user_id"],)).fetchone()
+            if not old or old["version"]!=payload.version: raise HTTPException(409,"账号已更新，请刷新后重试")
+            if old["role"] not in {"admin","manager"}: raise HTTPException(403,"当前角色不能修改账号名称")
+            if c.execute("SELECT 1 FROM auth_users WHERE username=? AND user_id<>?",(name,user["user_id"])).fetchone(): raise HTTPException(409,"账号名已存在")
+            c.execute("UPDATE auth_users SET username=?,display_name=?,version=version+1 WHERE user_id=?",(name,display,user["user_id"]))
+            c.execute("INSERT INTO audit_events(event_type,entity_id,content,created_at) VALUES (?,?,?,?)",("auth_profile_updated",user["user_id"],json.dumps({"username":name,**actor_metadata()},ensure_ascii=False),datetime.now(timezone.utc).isoformat()))
+        return {"success":True,"version":payload.version+1}
+
     @app.get("/api/auth/users")
     def users():
         admin()
@@ -289,6 +313,7 @@ def install_auth(app,connect,lock):
             old=c.execute("SELECT * FROM auth_users WHERE user_id=?",(identifier,)).fetchone()
             if not old: raise HTTPException(404,"账号不存在")
             if payload.version!=old["version"]: raise HTTPException(409,"账号信息已更新，请刷新")
+            if payload.display_name.strip()!=old["display_name"] and principal()["user_id"]!=identifier: raise HTTPException(403,"名称只能由账号本人修改")
             if old["role"]=="admin" and old["active"] and (not payload.active or payload.role!="admin") and c.execute("SELECT COUNT(*) FROM auth_users WHERE role='admin' AND active=1").fetchone()[0]<=1: raise HTTPException(409,"不能停用或降级最后一个管理员")
             c.execute("UPDATE auth_users SET display_name=?,role=?,staff_id=?,active=?,version=version+1 WHERE user_id=?",(payload.display_name.strip(),payload.role,payload.staff_id,int(payload.active),identifier))
             if not payload.active: c.execute("DELETE FROM auth_sessions WHERE user_id=?",(identifier,))

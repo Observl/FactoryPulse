@@ -1,3 +1,4 @@
+import {Button} from "./components/Button";
 import {useState} from "react";
 import {MetricsPrimer} from "./MetricMeaning";
 const steps=[
@@ -10,8 +11,8 @@ const steps=[
 ];
 export function HelpPage({onNavigate}:{onNavigate:(page:string)=>void}){
  const [tab,setTab]=useState("操作指南");
- return <div className="help-page"><nav className="section-tabs" aria-label="帮助主题">{["操作指南","指标词典","数据与备份"].map(item=><button key={item} className={tab===item?"active":""} aria-pressed={tab===item} onClick={()=>setTab(item)}>{item}</button>)}</nav>
- {tab==="操作指南"&&<section className="panel help-guide"><div className="panel-heading"><h2>完成一次维修</h2><span>日常从工作台待办开始</span></div><ol className="newcomer-steps">{steps.map((step,index)=><li key={step.title}><span className="guide-step-number">{index+1}</span><div><div className="guide-step-heading"><h3>{step.title}</h3><span>{step.who}</span></div><small>{step.place}</small><p>{step.text}</p><details className="guide-completion"><summary>怎样算完成？</summary><p>{step.done}</p></details><button className="text-link" onClick={()=>onNavigate(step.page)}>{step.action} →</button></div></li>)}</ol><details className="technical-details"><summary>撤回、删除与历史记录</summary><p>未开工安排可撤回待排程；完工提交可撤回执行中。允许删除的工单移入回收站后可恢复，维修履历和库存流水保留。不同数据版本的工单在工单页切换查看。</p></details></section>}
+ return <div className="help-page"><nav className="section-tabs" aria-label="帮助主题">{["操作指南","指标词典","数据与备份"].map(item=><Button key={item} className={tab===item?"active":""} aria-pressed={tab===item} onClick={()=>setTab(item)} variant="navigation">{item}</Button>)}</nav>
+ {tab==="操作指南"&&<section className="panel help-guide"><div className="panel-heading"><h2>完成一次维修</h2><span>日常从工作台待办开始</span></div><ol className="newcomer-steps">{steps.map((step,index)=><li key={step.title}><span className="guide-step-number">{index+1}</span><div><div className="guide-step-heading"><h3>{step.title}</h3><span>{step.who}</span></div><small>{step.place}</small><p>{step.text}</p><details className="guide-completion"><summary>怎样算完成？</summary><p>{step.done}</p></details><Button className="text-link" onClick={()=>onNavigate(step.page)}>{step.action} →</Button></div></li>)}</ol><details className="technical-details"><summary>撤回、删除与历史记录</summary><p>未开工安排可撤回待排程；完工提交可撤回执行中。允许删除的工单移入回收站后可恢复，维修履历和库存流水保留。不同数据版本的工单在工单页切换查看。</p></details></section>}
  {tab==="指标词典"&&<MetricsPrimer/>}
  {tab==="数据与备份"&&<section className="panel help-guide"><h2>数据与备份</h2><details className="help-topic"><summary>如何判断数据可用？</summary><p>检查缺失、重复、采样间断及格式，再核对单位、设备类型和采样时间。基础校验通过不代表已验证预测效果；历史数据不代表设备今天的状态。</p></details><details className="help-topic"><summary>风险评分是故障概率吗？</summary><p>不是。当前评分用于决定优先检查谁，尚未经过概率校准。标签或独立故障不足时，不生成模型评分。</p></details><details className="help-topic"><summary>备份范围与恢复</summary><p>启动后及每24小时自动备份业务数据库，包含工单、库存、账号与审计，不包含原始上传文件和系统凭据。恢复前停止服务，按项目恢复说明操作；备份需另行保存副本。</p></details></section>}</div>;
 }

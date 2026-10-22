@@ -9,7 +9,9 @@
     "build": "tsc --noEmit && vite build",
     "test:client": "node scripts/test-api-client.mjs",
     "desktop": "electron .",
-    "acceptance": ".venv\\Scripts\\python.exe scripts/final-acceptance.py"
+    "acceptance": ".venv\\Scripts\\python.exe scripts/final-acceptance.py",
+    "prebuild": "node scripts/check-button-system.mjs",
+    "check:buttons": "node scripts/check-button-system.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",

@@ -41,7 +41,7 @@ export function EquipmentInsights({data}:{data:Overview}) {
  </>;
 }
 
-export function RiskInsights({devices,onOpenDevice}:{devices:Device[];onOpenDevice:(id:string)=>void}) {
+export function RiskInsights({devices,onOpenDevice,ready=true}:{ready?:boolean;devices:Device[];onOpenDevice:(id:string)=>void}) {
  const ranked=[...devices].filter(device=>device.risk_available!==false).sort((a,b)=>Number(b.risk_score)-Number(a.risk_score));
  const riskWindow=devices[0]?.prediction_window||"当前窗口";
  const high=ranked.filter(d=>d.risk_score>.35).length,mid=ranked.filter(d=>d.risk_score>=.15&&d.risk_score<=.35).length,low=ranked.filter(d=>d.risk_score<.15).length;
@@ -50,17 +50,17 @@ export function RiskInsights({devices,onOpenDevice}:{devices:Device[];onOpenDevi
  const averageRisk=ranked.length?ranked.reduce((total,d)=>total+d.risk_score,0)/ranked.length*100:null;
  return <>
   <div className="metrics">
-    <Stat label="高风险设备" value={high} desc="风险评分 > 35分" accent/>
-    <Stat label="中风险设备" value={mid} desc="风险评分 15–35分"/>
-    <Stat label="低风险设备" value={low} desc="风险评分 < 15分"/>
-    <Stat label="平均风险评分" value={<Figure value={averageRisk} suffix=" 分" digits={2}/>} desc={`${riskWindow} · 未经概率校准`}/>
+    <Stat label="高风险设备" value={ready?high:"--"} desc="风险评分 > 35分" accent/>
+    <Stat label="中风险设备" value={ready?mid:"--"} desc="风险评分 15–35分"/>
+    <Stat label="低风险设备" value={ready?low:"--"} desc="风险评分 < 15分"/>
+    <Stat label="平均风险评分" value={ready?<Figure value={averageRisk} suffix=" 分" digits={2}/>:"--"} desc={`${riskWindow} · 未经概率校准`}/>
   </div>
   <div className="content-grid">
     <Panel title={`${riskWindow}故障风险 TOP 10`} note="风险评分 · 点击设备进入详情">
-     {top.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={top} layout="vertical" margin={{left:10,right:20}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" domain={[0,100]} unit="分"/><YAxis type="category" dataKey="name" width={82} tick={{fontSize:11}}/><Tooltip formatter={(v)=>[String(v)+" 分",`${riskWindow}风险评分`]}/><Bar dataKey="risk" fill="#FF7A1A" radius={[0,5,5,0]}>{top.map(device=><Cell key={device.name} cursor="pointer" onClick={()=>onOpenDevice(device.name)}/>)}</Bar></BarChart></ResponsiveContainer></div>:<Placeholder message="暂无风险评分数据"/>}
+     {top.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={top} layout="vertical" margin={{left:10,right:20}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" domain={[0,100]} unit="分"/><YAxis type="category" dataKey="name" width={82} tick={{fontSize:11}}/><Tooltip formatter={(v)=>[String(v)+" 分",`${riskWindow}风险评分`]}/><Bar dataKey="risk" fill="#FF7A1A" radius={[0,5,5,0]}>{top.map(device=><Cell key={device.name} cursor="pointer" onClick={()=>onOpenDevice(device.name)}/>)}</Bar></BarChart></ResponsiveContainer></div>:<Placeholder message={ready?"暂无风险评分数据":"--"}/>}
     </Panel>
     <Panel title="风险等级结构" note="15分 / 35分 为展示分段，非模型提醒线">
-     {devices.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={dist} dataKey="value" nameKey="name" innerRadius={52} outerRadius={91} label>{dist.map((_,i)=><Cell key={i} fill={["#94a3b8","#FFBD87","#FF7A1A"][i]}/>)}</Pie><Tooltip/><Legend/></PieChart></ResponsiveContainer></div>:<Placeholder message="暂无风险分布数据"/>}
+     {devices.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={dist} dataKey="value" nameKey="name" innerRadius={52} outerRadius={91} label>{dist.map((_,i)=><Cell key={i} fill={["#94a3b8","#FFBD87","#FF7A1A"][i]}/>)}</Pie><Tooltip/><Legend/></PieChart></ResponsiveContainer></div>:<Placeholder message={ready?"暂无风险分布数据":"--"}/>}
     </Panel>
   </div>
   {devices.some(device=>device.risk_available===false)&&<p className="hint">有 {devices.filter(device=>device.risk_available===false).length} 台设备证据不足，未纳入风险排行。这不表示它们安全。</p>}
@@ -90,7 +90,7 @@ export function AnomalyInsights({devices,version}:{devices:Device[];version:stri
    <Stat label="设备监测覆盖" value={`${visible}/${devices.length}`} desc="具备工艺温度读数"/>
    <Stat label="平均工艺温度" value={<Figure value={avg(temps)} suffix=" K" digits={1}/>} desc="最新监测值"/>
    <Stat label="平均设备转速" value={<Figure value={avg(speeds)} suffix=" rpm" digits={2}/>} desc="最新监测值"/>
-   <Stat label="可查看的历史采样" value={readings.length} desc={loading?"加载中":"已加载记录数"}/>
+   <Stat label="可查看的历史采样" value={loading?"--":readings.length} desc={loading?"加载中":"已加载记录数"}/>
   </div>
   <div className="content-grid">
    <Panel title="设备工艺温度对比" note="各设备最新监测值">

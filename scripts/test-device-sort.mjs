@@ -1,0 +1,22 @@
+import fs from 'node:fs';
+import ts from 'typescript';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync(new URL('../src/device-sort.ts',import.meta.url),'utf8');
+const stateSource=fs.readFileSync(new URL('../src/device-state.ts',import.meta.url),'utf8');
+const stateJS=ts.transpileModule(stateSource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2020}}).outputText;
+const linked=source.replace(/['"]\.\/device-state['"]/,JSON.stringify('data:text/javascript;base64,'+Buffer.from(stateJS).toString('base64')));
+const js=ts.transpileModule(linked,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2020}}).outputText;
+const {sortDevices}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+const devices=[{equipment_id:'E10',risk_score:.2,latest_reading:{timestamp:'2026-10-01',process_temperature_k:310}},{equipment_id:'E2',risk_score:.9,latest_reading:{timestamp:'2026-10-03',process_temperature_k:290}},{equipment_id:'E3',risk_score:.1,risk_available:false,latest_reading:{timestamp:'invalid'}}];
+assert.deepEqual(sortDevices(devices,'equipment_id','asc').map(d=>d.equipment_id),['E2','E3','E10']);
+assert.deepEqual(sortDevices(devices,'equipment_id','desc').map(d=>d.equipment_id),['E10','E3','E2']);
+for(const key of ['risk_score','timestamp','temperature'])for(const direction of ['asc','desc'])assert.equal(sortDevices(devices,key,direction).at(-1).equipment_id,'E3');
+assert.equal(sortDevices(devices,'risk_score','desc')[0].equipment_id,'E2');
+assert.equal(sortDevices(devices,'temperature','asc')[0].equipment_id,'E2');
+assert.deepEqual(devices.map(d=>d.equipment_id),['E10','E2','E3']);
+console.log('11 device ordering checks passed.');
+
+const sameRaw=[{equipment_id:'W',status:'待现场复核',review_required:true},{equipment_id:'U',status:'待现场复核',review_required:false},{equipment_id:'F',status:'故障'},{equipment_id:'N',status:'运行中'},{equipment_id:'S',status:'未启动'}];
+assert.deepEqual(sortDevices(sameRaw,'status','asc').map(d=>d.equipment_id),['U','S','N','W','F']);
+assert.deepEqual(sortDevices(sameRaw,'status','desc').map(d=>d.equipment_id),['F','W','N','S','U']);
+console.log('2 displayed-state ordering checks passed.');

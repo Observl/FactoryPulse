@@ -16,3 +16,7 @@
 样式入口：src/pearl-glass.css，在已有功能样式之后载入。该文件集中管理新主题，业务组件中的状态与权限逻辑不依赖材质效果。
 
 视觉验收：outputs/pearl-glass-qa，包括登录、新手教程、1600px桌面、390px手机和3840×2160截图。测试使用唯一冻结验收集的隔离副本和临时测试账号，没有为操作员创建或修改真实账号。
+
+## 统一按钮（强制）
+
+所有按钮复用 `src/components/Button.tsx`，样式最后由 `src/button-system.css` 管理。编辑操作使用 `ActionDialog`，加载与切换标签预留布局空间。禁止原生按钮或自定义按钮尺寸覆盖。详见 `docs/BUTTON-COMPONENTS.md`。

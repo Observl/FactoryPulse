@@ -16,7 +16,7 @@ FactoryPulse 是面向设备管理人员的本地优先维护辅助决策系统�
 | 设备台账 | 监测趋势、异常证据、历史维修、设备占用与数据来源 |
 | 风险中心 | 模型评分、趋势与规则参考、SHAP 解释、评估指标与提醒负担 |
 | 维护中心 | 维修需求、三方案比较、资源约束排程、审批、接单、开工、完工、验收和返修 |
-| 数据中心 | CSV/XLSX 导入、字段映射、实际数据质量检查、数据版本与来源追溯 |
+| 数据中心 | CSV/XLSX、SQLite / 兼容 SQL 文件导入、字段映射、实际数据质量检查、数据版本与来源追溯 |
 | 智能助手 | 设备证据查询与维修需求草拟；正式操作仍须授权人员确认 |
 | 个人中心 | 账号信息、角色待办、工单查询、修改密码、退出，以及管理员创建账号 |
 | 系统管理 | 独立账号、角色权限、操作审计、备份恢复与 AI 服务配置 |
@@ -41,7 +41,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1
 
 1. 在服务所在电脑创建首个管理员，密码至少 12 个字符；项目不提供默认账号或密码。
 2. 完成新手教程，进入工作台。首次空库会载入冻结的模型验证集。
-3. 点击头像或顶部账号按钮进入**个人中心**。管理员可展开“创建与管理账号”，为其他人员创建独立账号并分配角色。
+3. 点击左侧头像进入**个人中心**。管理员可展开“创建与管理账号”，为其他人员创建独立账号并分配角色。
 4. 按“复核 → 需求 → 排程 → 审批 → 执行 → 验收”体验维护闭环。
 
 正式启动脚本默认将业务数据保存在 `%LOCALAPPDATA%\FactoryPulse\data`。可通过环境变量 `FACTORYPULSE_DATA_DIR` 指定其他目录。账号、会话、业务数据库和备份不随源码发布。
@@ -127,8 +127,12 @@ docs/                   操作、设计、模型边界与验收说明
 
 ## 文档
 
+- [完整决策计划思维导图](docs/DECISION-MAP.md)
+- [统一按钮组件模板与布局约束](docs/BUTTON-COMPONENTS.md)
+- [评分计算说明与排程约束](docs/SCORING-AND-SCHEDULING.md)
 - [操作指南](docs/OPERATOR-GUIDE.md)
 - [登录与新手教程](docs/LOGIN-ONBOARDING.md)
+- [SQL 数据库导入与设备状态](docs/SQL-DATABASE-IMPORT.md)
 - [本地部署与离线交付](docs/LOCAL-DEPLOYMENT.md)
 - [冻结验证集说明](docs/MODEL-VALIDATION-DATASET.md)
 - [问题修复与验收边界](docs/FINAL-REVIEW-REMEDIATION.md)

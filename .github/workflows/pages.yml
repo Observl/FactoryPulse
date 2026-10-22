@@ -28,6 +28,7 @@ jobs:
         run: npm run build > build.log 2>&1 || { cat build.log; exit 1; }
         env:
           VITE_STATIC_DEMO: 'true'
+          VITE_BUILD_COMMIT: ${{ github.sha }}
       - name: Post compiler diagnostics to development issue
         if: failure()
         env:

@@ -47,7 +47,7 @@ def ewma_scores(readings: list[dict[str, Any]], alpha: float = 0.35) -> dict[str
         for value in values[1:]:
             previous = mean; mean = alpha * value + (1 - alpha) * mean; residuals.append(abs(value - previous))
         baseline = max(sum(residuals[:-1] or residuals) / max(len(residuals[:-1]), 1), 0.05)
-        result[equipment_id] = {"score": round(min(abs(values[-1] - mean) / baseline / 6, 1), 4), "status": "ready", "samples": len(values), "alpha": alpha, "ewma": round(mean, 3)}
+        result[equipment_id] = {"score": round(min(abs(values[-1] - mean) / baseline / 6, 1), 4), "status": "ready", "samples": len(values), "alpha": alpha, "ewma":mean,"feature":chosen,"baseline":baseline,"latest_value":values[-1],"deviation":abs(values[-1]-mean)}
     return result
 
 @dataclass
@@ -63,6 +63,7 @@ class ModelOutput:
     model_version: str = "industrial-xgb-purged-v8"
     replay: list[dict] = field(default_factory=list)
     artifact: dict[str, Any] = field(default_factory=dict)
+    calculations: dict[str, Any] = field(default_factory=dict)
 
 def _metrics(labels: Any, probabilities: Any, threshold: float = .5) -> dict[str, float]:
     predicted = probabilities >= threshold
@@ -237,17 +238,21 @@ def _xgboost_single(readings: list[dict[str, Any]]) -> ModelOutput:
     latest_matrix = matrix(latest_rows)
     scores = model.predict_proba(latest_matrix)[:,1]
     predictions = {str(r["equipment_id"]):round(float(scores[i]),4) for i,r in enumerate(latest_rows)}
-    explanations = {}
+    explanations = {}; calculations={}
     try:
-        values = shap.TreeExplainer(model).shap_values(latest_matrix)
+        explainer=shap.TreeExplainer(model)
+        values = explainer.shap_values(latest_matrix)
         values = values[-1] if isinstance(values,list) else values
         for ri,row in enumerate(latest_rows):
+            base_value=float(np.asarray(explainer.expected_value).reshape(-1)[-1]); contributions=[{"feature":name,"value":float(latest_matrix[ri,col]) if math.isfinite(latest_matrix[ri,col]) else None,"shap":float(values[ri,col])} for col,name in enumerate(features)]
+            margin=base_value+sum(item["shap"] for item in contributions)
+            calculations[str(row["equipment_id"]) ]={"base_margin":base_value,"sum_contributions":sum(item["shap"] for item in contributions),"margin":margin,"reconstructed_score":1/(1+math.exp(-max(-700,min(700,margin)))),"model_output":float(scores[ri]),"features":contributions}
             explanations[str(row["equipment_id"])] = sorted(({"feature":name,"value":float(latest_matrix[ri,col]) if math.isfinite(latest_matrix[ri,col]) else None,"shap":round(float(values[ri,col]),4)} for col,name in enumerate(features)),key=lambda item:abs(item["shap"]),reverse=True)[:5]
     except Exception as exc:
         return ModelOutput(predictions,{},"shap_error",f"评分已计算，解释不可用：{type(exc).__name__}",len(train),int(y_train.sum()),basis,evaluation,model_version=fitted_version,artifact=artifact)
     replay=[{"equipment_id":row["equipment_id"],"timestamp":row["timestamp"],"reading_id":row.get("reading_id"),"score":round(float(score),5),"alert":bool(score>=threshold),"observed_future_failure":int(row["future_failure"])} for row,score in zip(test,test_scores)]
     limitation="模拟数据仅验证程序，不代表现场效果" if evaluation["synthetic_validation_only"] else ("独立故障事件有限" if event_metrics["independent_test_events"]<10 else "现场效果仍需独立验证")
-    return ModelOutput(predictions,explanations,"ready",f"未来{horizon}小时风险评分；已隔离时间窗口，{limitation}，未经概率校准",len(train),int(y_train.sum()),basis,evaluation,model_version=fitted_version,replay=replay,artifact=artifact)
+    return ModelOutput(predictions,explanations,"ready",f"未来{horizon}小时风险评分；已隔离时间窗口，{limitation}，未经概率校准",len(train),int(y_train.sum()),basis,evaluation,model_version=fitted_version,replay=replay,artifact=artifact,calculations=calculations)
 
 
 def xgboost_with_shap(readings: list[dict[str, Any]]) -> ModelOutput:
@@ -286,7 +291,7 @@ def xgboost_with_shap(readings: list[dict[str, Any]]) -> ModelOutput:
     status="ready" if len(valid)==len(groups) else "partially_ready" if valid else "insufficient_labels"
     artifacts={"profiles":[{"profile_id":details[index]["profile_id"],"equipment_ids":details[index]["equipment_ids"],"artifact":output.artifact} for index,output in enumerate(outputs) if output.artifact]}
     version="industrial-adaptive-multi-"+hashlib.sha256(json.dumps(artifacts,sort_keys=True,separators=(",",":")).encode()).hexdigest()[:12] if artifacts["profiles"] else "industrial-xgb-purged-v8"
-    return ModelOutput(predictions,explanations,status,f"{len(groups)}套设备字段方案中{len(valid)}套完成历史验证；{len(predictions)}台有当前模型评分，未评分原因请查看设备方案；评分未经概率校准",sum(item.training_rows for item in outputs),sum(item.positives for item in outputs),"observed_future_failure_168h",evaluation,replay=sorted(replay,key=lambda row:row['timestamp']),model_version=version,artifact=artifacts)
+    return ModelOutput(predictions,explanations,status,f"{len(groups)}套设备字段方案中{len(valid)}套完成历史验证；{len(predictions)}台有当前模型评分，未评分原因请查看设备方案；评分未经概率校准",sum(item.training_rows for item in outputs),sum(item.positives for item in outputs),"observed_future_failure_168h",evaluation,replay=sorted(replay,key=lambda row:row['timestamp']),model_version=version,artifact=artifacts,calculations={key:value for output in outputs for key,value in output.calculations.items()})
 
 
 def combine_risks(rule_score: float, ewma: float|None, model: float|None) -> float:
@@ -321,10 +326,12 @@ def schedule_selected(selected:list[dict[str,Any]],staff:list[dict[str,Any]],ord
         from ortools.sat.python import cp_model
     except ImportError:
         return [],[{"reason":"排程引擎不可用","suggestion":"安装 OR-Tools 后重新生成"}]
-    base=datetime.fromisoformat(start_at) if start_at else datetime.now().replace(minute=0,second=0,microsecond=0)
-    def minute(value, fallback):
+    now=datetime.now()
+    base=datetime.fromisoformat(start_at) if start_at else now.replace(second=0,microsecond=0)+timedelta(minutes=int(bool(now.second or now.microsecond)))
+    def minute(value, fallback,round_up=False):
         if not value: return fallback
-        return int((datetime.fromisoformat(str(value))-base).total_seconds()/60)
+        offset=(datetime.fromisoformat(str(value))-base).total_seconds()/60
+        return math.ceil(offset) if round_up else math.floor(offset)
     model=cp_model.CpModel()
     intervals_by_staff={str(p.get("staff_id")):[] for p in staff}
     intervals_by_device={}
@@ -340,7 +347,7 @@ def schedule_selected(selected:list[dict[str,Any]],staff:list[dict[str,Any]],ord
     shared_conflicts=[{"reason":f"共享备件 {name} 合计需要 {demand[name]}，可用 {stock[name]}","suggestion":"补充库存或减少本轮任务后重算"} for name in insufficient]
     for booking_index,booking in enumerate(bookings or []):
         if not booking.get("start_at") or not booking.get("end_at"): continue
-        first=max(0,minute(booking["start_at"],0));last=minute(booking["end_at"],0)
+        first=max(0,minute(booking["start_at"],0));last=minute(booking["end_at"],0,True)
         if last<=first: continue
         fixed=model.new_fixed_size_interval_var(first,last-first,f"booked_{booking_index}")
         intervals_by_device.setdefault(str(booking["equipment_id"]),[]).append(fixed)
@@ -358,7 +365,7 @@ def schedule_selected(selected:list[dict[str,Any]],staff:list[dict[str,Any]],ord
             conflicts.append({"equipment_id":equipment,"reason":f"需要 {needed} 名具备 {skill} 技能的人员，当前仅 {len(eligible)} 名","suggestion":"补充技能人员或调整班次后重算"});continue
         if any(_num(part.get("quantity"),1)>_num(part.get("available_quantity"),0) for part in item.get("spare_parts",[])):
             conflicts.append({"equipment_id":equipment,"reason":"备件库存不足","suggestion":"补充备件后重算"});continue
-        lower=max(0,minute(item.get("window_start"),0)); upper=minute(item.get("window_end"),24*60)
+        lower=max(0,minute(item.get("window_start"),0,True)); upper=minute(item.get("window_end"),24*60)
         if upper-lower<duration:
             conflicts.append({"equipment_id":equipment,"reason":"设备停机窗口不足","suggestion":"延长停机窗口或调整维修任务"});continue
         if allow_subset:
@@ -366,7 +373,7 @@ def schedule_selected(selected:list[dict[str,Any]],staff:list[dict[str,Any]],ord
                 conflicts.append({"equipment_id":equipment,"reason":"单项维修费用已超过本轮预算","suggestion":"核对费用或提高预算后重新计算"});continue
             if max_hours is not None and duration>max_hours*60:
                 conflicts.append({"equipment_id":equipment,"reason":"单项维修工时已超过累计停机上限","suggestion":"核对工时或调整本轮累计工时上限"});continue
-            eligible=[person for person in eligible if min(upper,minute(person.get("shift_end"),int(_num(person.get("available_hours"),8)*60)))-max(lower,max(0,minute(person.get("shift_start"),0)))>=duration]
+            eligible=[person for person in eligible if min(upper,minute(person.get("shift_end"),int(_num(person.get("available_hours"),8)*60)))-max(lower,max(0,minute(person.get("shift_start"),0,True)))>=duration]
             if len(eligible)<needed:
                 conflicts.append({"equipment_id":equipment,"reason":"具备技能的人员班次与设备窗口交集不足","suggestion":"调整班次或设备停机窗口，保证所需人员可以同时参与"});continue
         end_limits[equipment]=max(0,upper)
@@ -382,7 +389,7 @@ def schedule_selected(selected:list[dict[str,Any]],staff:list[dict[str,Any]],ord
         for person in eligible:
             person_id=str(person["staff_id"])
             assigned=model.new_bool_var(f"assign_{index}_{person_id}")
-            shift_start=max(0,minute(person.get("shift_start"),0))
+            shift_start=max(0,minute(person.get("shift_start"),0,True))
             shift_end=minute(person.get("shift_end"),int(_num(person.get("available_hours"),8)*60))
             model.add(start>=shift_start).only_enforce_if(assigned)
             model.add(end<=shift_end).only_enforce_if(assigned)
@@ -393,7 +400,7 @@ def schedule_selected(selected:list[dict[str,Any]],staff:list[dict[str,Any]],ord
         affected=[o for o in orders if str(o.get("equipment_id"))==equipment]
         for oi,order in enumerate(affected):
             if order.get("start_at") and order.get("end_at"):
-                os=minute(order["start_at"],0); oe=minute(order["end_at"],0)
+                os=minute(order["start_at"],0); oe=minute(order["end_at"],0,True)
                 if oe<=os: raise ValueError("生产订单结束时间必须晚于开始时间")
                 before=model.new_bool_var(f"before_{index}_{oi}")
                 model.add(end<=os).only_enforce_if([before,present] if allow_subset else [before])

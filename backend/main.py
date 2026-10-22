@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import io, json, math, os, sqlite3, threading, csv, ipaddress, socket, re, uuid, hashlib
 from urllib.parse import urlparse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 import httpx
@@ -24,6 +24,7 @@ from .resources import install_resource_routes,ScenarioInput
 from . import inventory,security,backups,migrations
 from .replay import event_timeline
 from .analytics import combine_risks, cp_sat_select, ewma_scores, schedule_selected, xgboost_with_shap
+from .score_explanation import rule_details
 from .adaptive_training import load_training_config
 from .cnc_demo import build_cnc_demo
 from .model_validation_data import load_acceptance_dataset, build_model_validation, ORIGIN as MODEL_VALIDATION_ORIGIN
@@ -514,7 +515,7 @@ def _compute_analytics_snapshot(all_readings, risks):
         rule=num(risks.get(eid,{}).get("risk_score"))
         ewma_item=ewma.get(eid,{"score":None,"status":"insufficient_history","samples":0,"alpha":.35})
         model_score=model.predictions.get(eid)
-        devices[eid]={"rule_risk":rule,"ewma_risk":ewma_item.get("score"),"ewma_status":ewma_item.get("status"),"ewma_samples":ewma_item.get("samples",0),"model_risk":model_score,"combined_risk":model_score if model_score is not None else (ewma_item.get("score") if ewma_item.get("score") is not None else rule),"shap_top":model.explanations.get(eid,[])}
+        devices[eid]={"rule_risk":rule,"ewma_risk":ewma_item.get("score"),"ewma_status":ewma_item.get("status"),"ewma_samples":ewma_item.get("samples",0),"model_risk":model_score,"combined_risk":model_score if model_score is not None else (ewma_item.get("score") if ewma_item.get("score") is not None else rule),"shap_top":model.explanations.get(eid,[]),"scoring_details":{"model":model.calculations.get(eid),"trend":ewma_item}}
     summary={"rule_engine":"baseline_only","ewma":"ready" if any(item.get("score") is not None for item in ewma.values()) else "insufficient_history","xgboost":model.status,"shap":"ready" if model.explanations else "unavailable","training_rows":model.training_rows,"positive_labels":model.positives,"label_basis":model.label_basis,"message":model.message,"scoring_policy":"model_else_trend_else_rule_no_fusion","evaluation_scope":"模型分数及验证集阈值；规则和趋势回退未验证，不继承模型成绩","model_version":model.model_version,"evaluation":model.evaluation}
     _analytics_cache.update({"key":key,"devices":devices,"summary":summary})
     with connect() as c:
@@ -586,7 +587,7 @@ def _snapshot_consistent():
         available=not (settings_get("data_origin")=="USER_IMPORTED_OPERATIONAL" and analysis.get("model_risk") is None and analysis.get("ewma_risk") is None and num(reading.get("failure"))!=1)
         if not available: level="待评估"
         window=(f"未来{horizon//24}天" if horizon%24==0 else f"未来{horizon}小时") if analysis.get("model_risk") is not None else "当前工况参考"
-        output.append({**e,**analysis,"risk_score":score,"review_required":review_required,"model_alert_threshold":threshold,"risk_available":available,"risk_level":level,"risk_origin":"TIME_SPLIT_MODEL_WITH_RULE_BASELINE" if analysis.get("model_risk") is not None else risk.get("data_origin","RULE_OR_TREND_ONLY"),"latest_reading":reading,"prediction_at":reading.get("timestamp"),"prediction_window":window,"risk_semantics":("模型分数用于检查排序，不是故障概率；等级线仅作展示，模型提醒线见历史验证" if analysis.get("model_risk") is not None else "规则或趋势参考，未通过模型历史评估，不继承模型成绩") if available else "证据不足，尚不能评估；不能解读为低风险","model_version":analytics.get("summary",{}).get("model_version","workbook-provided-score"),"primary_evidence":evidence,"recommended_action":action,"recommended_by":reading.get("timestamp"),"affected_orders":[str(o.get("order_id")) for o in order_map.get(eid,[])],"alert_status":state.get("status","待确认" if level in ("高","中") else "观察"),"alert_note":state.get("note","")})
+        output.append({**e,**analysis,"risk_score":score,"scoring_details":{**analysis.get("scoring_details",{}),"rule":rule_details(risk,reading),"selected_source":"model" if analysis.get("model_risk") is not None else "trend" if analysis.get("ewma_risk") is not None else "rule"},"review_required":review_required,"model_alert_threshold":threshold,"risk_available":available,"risk_level":level,"risk_origin":"TIME_SPLIT_MODEL_WITH_RULE_BASELINE" if analysis.get("model_risk") is not None else risk.get("data_origin","RULE_OR_TREND_ONLY"),"latest_reading":reading,"prediction_at":reading.get("timestamp"),"prediction_window":window,"risk_semantics":("模型分数用于检查排序，不是故障概率；等级线仅作展示，模型提醒线见历史验证" if analysis.get("model_risk") is not None else "规则或趋势参考，未通过模型历史评估，不继承模型成绩") if available else "证据不足，尚不能评估；不能解读为低风险","model_version":analytics.get("summary",{}).get("model_version","workbook-provided-score"),"primary_evidence":evidence,"recommended_action":action,"recommended_by":reading.get("timestamp"),"affected_orders":[str(o.get("order_id")) for o in order_map.get(eid,[])],"alert_status":state.get("status","待确认" if level in ("高","中") else "观察"),"alert_note":state.get("note","")})
     return output
 @app.get("/api/overview")
 def overview(limit:int=500):
@@ -724,8 +725,8 @@ def simulate(inp:SimulationInput):
         return _simulate_consistent(inp)
 
 
-def _simulate_consistent(inp:SimulationInput,candidate_only=False,read_only=False):
-    devices=snapshot()
+def _simulate_consistent(inp:SimulationInput,candidate_only=False,read_only=False,prepared_devices=None,skip_preselection=False):
+    devices=prepared_devices if prepared_devices is not None else snapshot()
     if not devices: raise HTTPException(400,"请先导入Excel测试工作簿")
     scenarios=rows("scenarios")
     if not scenarios: raise HTTPException(422,"请先在维护资源中填写预算、人数和累计停机工时限制")
@@ -765,7 +766,7 @@ def _simulate_consistent(inp:SimulationInput,candidate_only=False,read_only=Fals
     optimizer_status="not_used"
     if inp.strategy=="optimized":
         pool=sorted((item for item in candidates if item["net_value"]>0),key=lambda x:(x["net_value"]/max(x["cost"],1),x["risk"]),reverse=True)
-        selected,optimizer_status=cp_sat_select(pool,budget,max_hours,staff_count)
+        selected,optimizer_status=(pool,"feasible") if skip_preselection else cp_sat_select(pool,budget,max_hours,staff_count)
         if optimizer_status in ("optimal","feasible"):
             spent=sum(item["cost"] for item in selected); elapsed=sum(item["hours"] for item in selected)
         else:
@@ -1309,20 +1310,27 @@ def calculate_comparison(payload:ComparisonInput):
         return _compare_strategies_consistent(payload.scenario_id,persist=True,executable=payload.executable)
 
 def _compare_strategies_consistent(scenario_id,persist=False,executable=False):
-    if not snapshot(): raise HTTPException(400,"请先导入测试工作簿")
+    devices=snapshot()
+    if not devices: raise HTTPException(400,"请先导入测试工作簿")
     requirements=[record for record in list_work_orders()["records"] if record["status"]=="草稿·待排程" and record.get("dataset_version")==settings_get("last_sync_at")]
     priorities={record["equipment_id"]:{"高":.9,"中":.6,"低":.3}.get(record.get("priority","中"),.6) for record in requirements}
     strategies=[]
     now=datetime.now(timezone.utc).isoformat()
+    staff=rows("staff");production_orders=rows("orders")
+    bookings=[record for record in list_work_orders()["records"] if record["status"] in {"待审批","已批准","已接单","执行中","已暂停"}]
+    scheduled_cache={}
+    planning_clock=datetime.now();planning_origin=(planning_clock.replace(second=0,microsecond=0)+timedelta(minutes=int(bool(planning_clock.second or planning_clock.microsecond)))).isoformat(sep=" ")
     for strategy in ("fixed_interval","risk_threshold","optimized"):
-        result=_simulate_consistent(SimulationInput(scenario_id=scenario_id,strategy=strategy,equipment_ids=list(priorities) if priorities else None,confirmed_priorities=priorities),read_only=not persist)
+        result=_simulate_consistent(SimulationInput(scenario_id=scenario_id,strategy=strategy,equipment_ids=list(priorities) if priorities else None,confirmed_priorities=priorities),read_only=not persist,prepared_devices=devices,skip_preselection=executable)
         if executable:
             # Every strategy is checked against the same actual staff, shifts, orders and reservations.
-            bookings=[record for record in list_work_orders()["records"] if record["status"] in {"待审批","已批准","已接单","执行中","已暂停"}]
-            pool=(_simulate_consistent(SimulationInput(scenario_id=scenario_id,strategy=strategy,equipment_ids=list(priorities) if priorities else None,confirmed_priorities=priorities),candidate_only=True,read_only=True)["selected"] if strategy=="optimized" else result["selected"])
+            pool=result["selected"]
             busy={str(record["equipment_id"]) for record in bookings}
             pool=[item for item in pool if str(item["equipment_id"]) not in busy]
-            scheduled,conflicts=schedule_selected(pool,rows("staff"),rows("orders"),staff_limit=result["constraints"]["staff_count"],bookings=bookings,allow_subset=True,budget=result["constraints"]["budget"],max_hours=result["constraints"]["max_downtime_h"])
+            signature=json.dumps({"pool":sorted(pool,key=lambda item:item["equipment_id"]),"constraints":result["constraints"]},sort_keys=True)
+            if signature not in scheduled_cache:
+                scheduled_cache[signature]=schedule_selected(sorted(pool,key=lambda item:item["equipment_id"]),staff,production_orders,start_at=planning_origin,staff_limit=result["constraints"]["staff_count"],bookings=bookings,allow_subset=True,budget=result["constraints"]["budget"],max_hours=result["constraints"]["max_downtime_h"])
+            scheduled,conflicts=json.loads(json.dumps(scheduled_cache[signature]))
             result["selected"]=scheduled
             result["conflicts"]=conflicts
             result["summary"].update(task_count=len(scheduled),maintenance_cost=round(sum(i["cost"] for i in scheduled),2),maintenance_hours=round(sum(i["hours"] for i in scheduled),2))
@@ -1586,6 +1594,8 @@ async def copilot_chat(inp:ChatInput,request:Request):
         return {"answer":"AI服务暂不可用，设备查询和人工维护流程不受影响。请稍后重试或进入工作台继续处理。","mode":"unavailable","trace":[],"proposals":[]}
 
 
+from .database_import import install_database_import
+install_database_import(app,IMPORT_SESSION_DIR,analyze_industrial_file)
 install_import_pipeline(app,connect,settings_get,_lock,IMPORT_SESSION_DIR)
 
 install_resource_routes(app,connect,rows,_lock)
@@ -1604,3 +1614,7 @@ if os.getenv("FACTORYPULSE_SERVE_UI") == "1":
     if not (ui_directory / "index.html").is_file():
         raise RuntimeError("找不到已构建的前端文件，请先完成前端构建或设置 FACTORYPULSE_UI_DIR")
     app.mount("/", StaticFiles(directory=ui_directory, html=True), name="factorypulse-ui")
+
+
+from .agent_harness import install_harness
+agent_store = install_harness(app, connect, _lock, agent_dispatch, copilot_chat, ChatInput)
