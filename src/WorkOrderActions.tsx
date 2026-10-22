@@ -12,7 +12,7 @@ const actions:Record<string,[string,string][]>={"草稿·待排程":[["cancel","
 
 export function WorkOrderActions({order,onChanged,onBusyChange,showHistory=true}:{order:Order;onChanged:()=>Promise<void>;onBusyChange?:(busy:boolean)=>void;showHistory?:boolean}){
  const auth=useAuth();const unsaved=useUnsavedChanges();
- const permitted=(action:string)=>!auth.required||!!auth.user&&(["admin","manager"].includes(auth.user.role)||(auth.user.role==="technician"&&["accept","start","pause","resume","finish"].includes(action)&&(order.staff_ids||[order.staff_id]).includes(auth.user.staff_id)));
+ const permitted=(action:string)=>!auth.required||!!auth.user&&(["developer","admin"].includes(auth.user.role)||(auth.user.role==="user"&&["accept","start","pause","resume","finish"].includes(action)&&(order.staff_ids||[order.staff_id]).includes(auth.user.staff_id)));
  const [partUse,setPartUse]=useState<Record<string,string>>({}),[partsConfirmed,setPartsConfirmed]=useState(false),[action,setAction]=useState(""),[actor,setActor]=useState(""),[note,setNote]=useState(""),[hours,setHours]=useState(""),[cost,setCost]=useState(""),[requestId,setRequestId]=useState(()=>crypto.randomUUID()),[busy,setBusy]=useState(false),[error,setError]=useState(""),[result,setResult]=useState("");
  const openOperation=useExclusiveOperation(()=>{setAction("");setNote("");unsaved.clear()});
  useEffect(()=>{if(auth.user)setActor(auth.user.display_name)},[auth.user?.user_id,auth.user?.display_name]);

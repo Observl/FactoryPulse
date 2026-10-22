@@ -61,7 +61,7 @@ def install_backups(app, database, connect):
 
     def admin():
         user = principal()
-        if user and user["role"] != "admin":
+        if user and user["role"] != "developer":
             raise HTTPException(403, "备份管理需要管理员权限")
 
     def perform():

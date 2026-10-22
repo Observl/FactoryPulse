@@ -292,7 +292,7 @@ def sync_cnc_demo():
 @app.post("/api/sync/model-validation")
 def sync_model_validation():
     """An explicit opt-in fixture; previous datasets and work orders are retained."""
-    security.require_roles("admin","manager")
+    security.require_roles("developer","admin")
     data,source_date=load_acceptance_dataset()
     validate(data)
     synced_at=datetime.now(timezone.utc).isoformat()
@@ -1115,7 +1115,7 @@ class WorkOrderTransition(BaseModel):
 
 @app.post("/api/work-orders/{work_order_id}/transition")
 def transition_work_order(work_order_id: str, payload: WorkOrderTransition):
-    security.require_roles("admin","manager","technician")
+    security.require_roles("developer","admin","user")
     payload=payload.model_copy(update={"actor":security.identity(payload.actor)})
     transitions = {"accept":({"已批准"},"已接单"),"start":({"已接单"},"执行中"),"pause":({"执行中"},"已暂停"),"resume":({"已暂停"},"执行中"),"finish":({"执行中"},"待验收"),"verify":({"待验收"},"已完成"),"rework":({"待验收"},"执行中"),"revise":({"已退回","已驳回"},"草稿·待排程"),"cancel":({"草稿·待排程","待审批","已批准","已接单","已暂停","已退回","已驳回"},"已取消")}
     if payload.action not in transitions: raise HTTPException(422,"未知工单操作")
@@ -1180,7 +1180,7 @@ class ApprovalInput(BaseModel):
 
 @app.post("/api/work-orders/{work_order_id}/approval")
 def approve_work_order(work_order_id:str,payload:ApprovalInput):
-    security.require_roles("admin","manager")
+    security.require_roles("developer","admin")
     payload=payload.model_copy(update={"approver":security.identity(payload.approver)})
     if not payload.approver.strip(): raise HTTPException(422,"请填写审批人员")
     if payload.request_id is not None and not payload.request_id.strip(): raise HTTPException(422,"操作编号不能为空")
@@ -1303,7 +1303,7 @@ class ComparisonInput(BaseModel):
 
 @app.post("/api/strategies/compare")
 def calculate_comparison(payload:ComparisonInput):
-    security.require_roles("admin","manager")
+    security.require_roles("developer","admin")
     with _lock:
         return _compare_strategies_consistent(payload.scenario_id,persist=True,executable=payload.executable)
 
@@ -1477,14 +1477,14 @@ def _agent_dispatch_consistent(name: str, arguments: dict) -> dict:
     selected=next((d for d in devices if d["equipment_id"]==identifier),None)
     source={"source":"SQLite / "+name,"data_time":max((str(d.get("prediction_at") or "") for d in devices),default=""),"data_version":settings_get("last_sync_at"),"business_revision":settings_get("business_revision","0")}
     if name=="draft_schedule":
-        security.require_roles("admin","manager")
+        security.require_roles("developer","admin")
         payload=ScheduleRequest(scenario_id=arguments.get("scenario_id"),start_at=arguments.get("start_at"),request_id="agent-preview-"+uuid.uuid4().hex)
         preview=_generate_schedule_consistent(payload,preview_only=True)
         proposal={"proposal_id":uuid.uuid4().hex,"kind":"schedule","scenario_id":payload.scenario_id,"start_at":payload.start_at,"dataset_version":source["data_version"],"business_revision":source["business_revision"],"prepared":preview,"scheduled":preview["scheduled"],"conflicts":preview["conflicts"],"note":"后端约束计算的排程草案；用户确认后进入待审批，不能直接派工","created_at":datetime.now(timezone.utc).isoformat()}
         with connect() as c: c.execute("INSERT INTO settings VALUES (?,?)",("agent_proposal:"+proposal["proposal_id"],json.dumps(proposal,ensure_ascii=False)))
         return {**source,"proposal":{key:value for key,value in proposal.items() if key!="prepared"},"message":"排程草案已计算，请核对人员、时间与冲突后人工确认"}
     if name=="draft_constraints":
-        security.require_roles("admin","manager")
+        security.require_roles("developer","admin")
         original=next((item for item in rows("scenarios") if item.get("scenario_id")==arguments.get("scenario_id")),None)
         if not original: raise ValueError("请提供已录入的排程条件编号")
         note=str(arguments.get("note") or "").strip()[:500]
@@ -1504,7 +1504,7 @@ def _agent_dispatch_consistent(name: str, arguments: dict) -> dict:
         allowed={key:value for key,value in arguments.items() if key in {"scenario_id","budget","max_downtime_h"}}
         return {**source,"strategies":[simulate(SimulationInput(**allowed,strategy=strategy)) for strategy in ("fixed_interval","risk_threshold","optimized")]}
     if name=="draft_work_order":
-        security.require_roles("admin","manager")
+        security.require_roles("developer","admin")
         note=str(arguments.get("note") or "")[:500]
         if not note.strip(): raise ValueError("维护动作不能为空")
         proposal={"proposal_id":uuid.uuid4().hex,"equipment_id":identifier,"equipment_name":selected.get("equipment_name"),"note":note,"dataset_version":settings_get("last_sync_at"),"created_at":datetime.now(timezone.utc).isoformat(),"status":"等待用户确认"}
@@ -1520,7 +1520,7 @@ class ProposalConfirmation(BaseModel):
 
 @app.post("/api/copilot/proposals/{proposal_id}/confirm")
 def confirm_agent_proposal(proposal_id: str, payload: ProposalConfirmation):
-    security.require_roles("admin","manager")
+    security.require_roles("developer","admin")
     if not payload.confirmed: raise HTTPException(422,"需要明确确认维护需求")
     with _lock:
         with connect() as c:
@@ -1597,7 +1597,7 @@ async def copilot_chat(inp:ChatInput,request:Request):
     except HTTPException as exc:
         return {"answer":plain_answer("AI连接未就绪："+str(exc.detail)+"。可继续在工作台查询设备和处理维护。"),"mode":"unavailable","trace":[],"proposals":[]}
     try:
-        result=await run_agent(base,model,_api_key,inp.question,agent_dispatch,read_only=bool(security.principal() and security.principal()["role"] not in {"admin","manager"}),should_stop=request.is_disconnected)
+        result=await run_agent(base,model,_api_key,inp.question,agent_dispatch,read_only=bool(security.principal() and security.principal()["role"] not in {"developer","admin"}),should_stop=request.is_disconnected)
         return {**result,"mode":"tool_agent","data_note":"模型按需读取所选设备和计算结果；仅可起草需求，正式排程和审批需人工操作"}
     except (httpx.RequestError,RuntimeError,ValueError,IndexError,KeyError):
         return {"answer":"AI服务暂不可用，设备查询和人工维护流程不受影响。请稍后重试或进入工作台继续处理。","mode":"unavailable","trace":[],"proposals":[]}

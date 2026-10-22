@@ -12,7 +12,7 @@ def prepare():
     assert client.post('/api/import',files={'file':('test.xlsx',workbook(),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}).status_code==200
     base=(datetime.now()+timedelta(days=2)).replace(hour=8,minute=0,second=0,microsecond=0)
     at=lambda hour:(base+timedelta(hours=hour)).isoformat(sep=' ')
-    for sid in ['ST-1','ST-2']:
+    for sid in ['1','2']:
         post('/api/resources/staff/'+sid,{'staff_name':sid,'skills':['机修'],'available_hours':8,'shift_start':at(0),'shift_end':at(10)})
     post('/api/resources/orders/O-1',{'order_name':'生产占用','equipment_id':'CNC-001','start_at':at(0),'end_at':at(2),'due_at':at(2)})
     post('/api/resources/requirements/CNC-001',{'maintenance_hours':2,'maintenance_cost_cny':500,'required_skill':'机修','required_staff_count':1,'window_start':at(0),'window_end':at(10),'spare_parts':[{'part_name':'轴承','quantity':1,'available_quantity':5}]})
@@ -61,11 +61,11 @@ def test_dataset_timeline_never_mixes_orders_or_staff():
     assert now['current'] and now['work_orders']==[]
     past=client.get('/api/maintenance/timeline',params={'dataset_version':old}).json()
     assert not past['current'] and len(past['work_orders'])==1
-    assert {p['staff_id'] for p in past['staff']}=={'ST-1','ST-2'}
+    assert {p['staff_id'] for p in past['staff']}=={'1','2'}
     assert client.get('/api/work-orders',params={'dataset_version':old}).json()['records'][0]['work_order_id']==order['work_order_id']
 
 def edit_payload(order,at,**extra):
-    return {'version':order['version'],'staff_ids':['ST-2'],'start_at':at(4),'end_at':at(6),'scenario_id':'S-1','note':'拖动任务调整','request_id':uuid.uuid4().hex,**extra}
+    return {'version':order['version'],'staff_ids':['2'],'start_at':at(4),'end_at':at(6),'scenario_id':'S-1','note':'拖动任务调整','request_id':uuid.uuid4().hex,**extra}
 
 def test_timeline_preview_then_save_invalidates_approval_and_is_idempotent():
     order,at=prepare();wid=order['work_order_id']
@@ -77,15 +77,15 @@ def test_timeline_preview_then_save_invalidates_approval_and_is_idempotent():
     saved=post(f'/api/work-orders/{wid}/timeline',payload)
     assert saved['status']=='待审批'
     assert post(f'/api/work-orders/{wid}/timeline',payload)==saved
-    item=current(wid);assert item['staff_ids']==['ST-2'] and item['start_at']==at(4)
-    assert item['execution_history'][-1]['before']['staff_ids']!=['ST-2'] or item['execution_history'][-1]['before']['start_at']!=at(4)
+    item=current(wid);assert item['staff_ids']==['2'] and item['start_at']==at(4)
+    assert item['execution_history'][-1]['before']['staff_ids']!=['2'] or item['execution_history'][-1]['before']['start_at']!=at(4)
     assert client.get('/api/resources/inventory').json()['records'][0]['reserved_quantity']==0
 
 def test_timeline_rejects_order_overlap_short_duration_and_missing_skill():
     order,at=prepare();path=f"/api/work-orders/{order['work_order_id']}/timeline"
     assert client.post(path,json=edit_payload(order,at,start_at=at(0),end_at=at(2))).status_code==422
     assert client.post(path,json=edit_payload(order,at,end_at=at(5))).status_code==422
-    post('/api/resources/staff/ST-2',{'staff_name':'电工','skills':['电气'],'available_hours':8,'shift_start':at(0),'shift_end':at(10)})
+    post('/api/resources/staff/2',{'staff_name':'电工','skills':['电气'],'available_hours':8,'shift_start':at(0),'shift_end':at(10)})
     assert client.post(path,json=edit_payload(order,at)).status_code==422
 
 def test_stale_timeline_preview_cannot_overwrite_resource_change():

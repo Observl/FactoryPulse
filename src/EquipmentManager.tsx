@@ -52,7 +52,7 @@ export function EquipmentManager({focusedAlert="",focusedWorkOrder="",devices,da
  const currentHandled=handled.filter(item=>item.dataset_version===dataVersion);
  const assigned=(order:WorkOrder)=>{
   const task=order as WorkOrder&{staff_id?:string;staff_ids?:string[]};
-  return auth.canManage||(auth.user?.role==="technician"&&!!auth.user.staff_id&&(task.staff_ids||[task.staff_id]).includes(auth.user.staff_id));
+  return auth.canManage||(auth.user?.role==="user"&&!!auth.user.staff_id&&(task.staff_ids||[task.staff_id]).includes(auth.user.staff_id));
  };
  const closedStates=["已完成","已取消"];
  const displayedOrders=currentOrders.filter(order=>(orderFilter==="全部"||(orderFilter==="未关闭"?!closedStates.includes(order.status):order.status===orderFilter))&&(!mineOnly||assigned(order))&&[order.work_order_id,order.equipment_id,order.staff_name||""].some(value=>value.toLocaleLowerCase().includes(orderQuery.trim().toLocaleLowerCase())));

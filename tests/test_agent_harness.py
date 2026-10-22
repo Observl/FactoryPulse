@@ -26,7 +26,7 @@ def harness(tmp_path, monkeypatch):
         c.execute("INSERT INTO records VALUES ('equipment',0,?)", (encode({"equipment_id":"E1","equipment_name":"旧名称","equipment_type":"CNC"}),))
         c.execute("INSERT INTO settings VALUES ('business_revision','1')")
         c.execute("INSERT INTO settings VALUES ('last_sync_at','v1')")
-    user = {"user_id":"u1", "role":"manager"}
+    user = {"user_id":"u1", "role":"admin"}
     monkeypatch.setattr(security, "principal", lambda: user or None)
     app = FastAPI()
     store = install_harness(app, connect, threading.RLock(), lambda *a: {})
@@ -77,7 +77,7 @@ def test_permission_rejects_cross_user_tamper_role_and_stale(harness):
     user["user_id"] = "u1"
     user["role"] = "viewer"
     assert decide(request,sid,p).status_code == 403
-    user["role"] = "manager"
+    user["role"] = "admin"
     assert decide(request,sid,p,digest="a"*64).status_code == 403
     with connect() as c: c.execute("UPDATE settings SET value='2' WHERE key='business_revision'")
     assert decide(request,sid,p).status_code == 409

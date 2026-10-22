@@ -24,7 +24,7 @@ def workbook():
         s=w.create_sheet(sheet)
         s.append(required)
         record={name: "x" for name in required}
-        record.update({"equipment_id":"CNC-001","equipment_name":"测试数控机床","reading_id":"R-1","timestamp":"2026-10-15 08:00:00","scenario_id":"S-1","risk_score":0.8,"maintenance_budget_cny":2000,"risk_threshold":0.65,"available_staff_count":2,"max_downtime_h":8,"inspection_cost_cny":100,"repair_cost_cny":500,"inspection_duration_h":1,"repair_duration_h":2,"required_staff_count":1,"assumed_failure_loss_cny":5000,"staff_id":"ST-1","skills":"机修","available_hours":8,"order_id":"O-1","maintenance_id":"M-1","rotational_speed_rpm":1300,"torque_nm":25,"air_temperature_k":298,"process_temperature_k":310,"tool_wear_min":80})
+        record.update({"equipment_id":"CNC-001","equipment_name":"测试数控机床","reading_id":"R-1","timestamp":"2026-10-15 08:00:00","scenario_id":"S-1","risk_score":0.8,"maintenance_budget_cny":2000,"risk_threshold":0.65,"available_staff_count":2,"max_downtime_h":8,"inspection_cost_cny":100,"repair_cost_cny":500,"inspection_duration_h":1,"repair_duration_h":2,"required_staff_count":1,"assumed_failure_loss_cny":5000,"staff_id":"1","skills":"机修","available_hours":8,"order_id":"O-1","maintenance_id":"M-1","rotational_speed_rpm":1300,"torque_nm":25,"air_temperature_k":298,"process_temperature_k":310,"tool_wear_min":80})
         s.append([record[k] for k in required])
     b=io.BytesIO();w.save(b);return b.getvalue()
 def test_health():

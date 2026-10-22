@@ -28,14 +28,13 @@
 
 只有以下身份表上传 D1：账号与密码哈希、会话哈希、登录限流、教程进度和身份操作审计。设备、工单、模型数据继续在业务服务持久卷中。D1 不开放匿名 SQL 接口；网站账号的权限与 Cloudflare 控制台权限是两套独立权限。
 
+既有账号表升级运行：
+
 ```powershell
-.venv\Scripts\python.exe scripts/prepare-cloud.py
-.venv\Scripts\python.exe scripts/migrate-d1-identity.py --source .env.runtime/data/factorypulse.sqlite3 --config .secrets/identity.json --admin-password-file .secrets/cloud-admin-password
+.venv\Scripts\python.exe scripts/upgrade-d1-account-schema.py
 ```
 
-迁移只向空账号库写入；保留原有 PBKDF2 密码哈希及教程进度，增加 `test` 管理员和只读访客，不复制旧会话。已有本地账号不删除。迁移后用户重新登录，所有密码、权限和会话由集中库校验；修改密码使所有部署的旧会话一起失效。
-
-管理员的登录名为“线上测试员”，固定 ID 为 `test`。所有部署均按用户名登录；已有用户名 `test` 的只读账号完整保留，不会因为同名 ID 被升级或覆盖。
+该操作保留有效的数字编号账号及密码，移除 username，修复内部事务表，并在私有目录备份。账号使用从 10001 开始的数字编号登录，不再自动创建默认管理员或访客。用户自行配置账号，密码使用 64 位 SHA-256；角色和人员编号约束见 [账号表规则](ACCOUNT-SCHEMA.md)。
 
 本地启动前设置：
 

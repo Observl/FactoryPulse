@@ -7,14 +7,14 @@ from backend import main
 def test_cloud_seed_is_idempotent_and_does_not_reset_password():
     initialize_accounts(main.connect,main._lock,'isolated-fixture-password-2026')
     with main.connect() as c:
-        c.execute("UPDATE auth_users SET password_hash='changed' WHERE user_id='test'")
+        c.execute("UPDATE auth_users SET password_hash='changed' WHERE user_id='10001'")
     initialize_accounts(main.connect,main._lock,'isolated-fixture-password-2026')
     with main.connect() as c:
-        assert c.execute("SELECT password_hash FROM auth_users WHERE user_id='test'").fetchone()[0]=='changed'
-        assert c.execute("SELECT role FROM auth_users WHERE user_id='cloud-viewer'").fetchone()[0]=='viewer'
+        assert c.execute("SELECT password_hash FROM auth_users WHERE user_id='10001'").fetchone()[0]=='changed'
+        assert c.execute("SELECT role FROM auth_users WHERE user_id='10002'").fetchone()[0]=='viewer'
 
 def test_cloud_seed_refuses_to_overwrite_existing_local_account():
-    with main.connect() as c:c.execute("INSERT INTO auth_users VALUES('local','local','Local','admin',NULL,'hash',1,1)")
+    with main.connect() as c:c.execute("INSERT INTO auth_users VALUES('local','local','Local','developer',NULL,'hash',1,1)")
     with pytest.raises(RuntimeError,match='不能覆盖'):initialize_accounts(main.connect,main._lock,'isolated-fixture-password-2026')
 
 def test_cloud_admin_id_does_not_overwrite_same_named_local_viewer(monkeypatch):
@@ -25,7 +25,7 @@ def test_cloud_admin_id_does_not_overwrite_same_named_local_viewer(monkeypatch):
         c.execute("INSERT INTO auth_users VALUES('existing-viewer','test','Existing viewer','viewer',NULL,?,1,1)",(password_hash('existing-viewer-password-123'),))
     monkeypatch.setenv('FACTORYPULSE_DEPLOYMENT','cloud')
     cloud=client.post('/api/auth/login',json={'username':'线上测试员','password':'isolated-fixture-password-2026'})
-    assert cloud.status_code==200 and cloud.json()['user']['user_id']=='test' and cloud.json()['user']['role']=='admin'
+    assert cloud.status_code==200 and cloud.json()['user']['user_id']=='10001' and cloud.json()['user']['role']=='developer'
     assert client.post('/api/auth/login',json={'username':'test','password':'isolated-fixture-password-2026'}).status_code==401
     monkeypatch.delenv('FACTORYPULSE_DEPLOYMENT')
     local=client.post('/api/auth/login',json={'username':'test','password':'existing-viewer-password-123'})

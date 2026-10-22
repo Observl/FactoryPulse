@@ -31,17 +31,17 @@ def local():
 
 def test_stale_writes_are_rejected_and_batch_is_rolled_back(tmp_path):
     store=FakeD1(tmp_path/'identities.sqlite3');first=IdentityConnection(store,local);stale=IdentityConnection(store,local)
-    with first as c:c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",('owner','owner','Owner','admin',None,'hash'))
+    with first as c:c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",('10001','10001','Owner','developer','0','hash'))
     with pytest.raises(HTTPException) as error:
-        with stale as c:c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",('stale','stale','Stale','admin',None,'hash'))
+        with stale as c:c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",('10002','10002','Stale','developer','0','hash'))
     assert error.value.status_code==409
-    revision,rows=store.snapshot();assert revision==1 and [u['user_id'] for u in rows['auth_users']]==['owner']
+    revision,rows=store.snapshot();assert revision==1 and [u['user_id'] for u in rows['auth_users']]==[10001]
 
 def test_exception_never_commits_partial_identity_changes(tmp_path):
     store=FakeD1(tmp_path/'identities.sqlite3')
     with pytest.raises(ValueError):
         with IdentityConnection(store,local) as c:
-            c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",('a','aaa','A','admin',None,'hash'));raise ValueError()
+            c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",('10001','10001','A','developer','0','hash'));raise ValueError()
     assert store.snapshot()[1]['auth_users']==[]
 
 def test_read_only_snapshot_does_not_write_or_advance_revision(tmp_path):
@@ -52,10 +52,10 @@ def test_read_only_snapshot_does_not_write_or_advance_revision(tmp_path):
 def test_auth_sql_round_trip_preserves_rows_and_versions(tmp_path):
     store=FakeD1(tmp_path/'identities.sqlite3')
     with IdentityConnection(store,local) as c:
-        c.execute('BEGIN IMMEDIATE');c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",('a','aaa','A','admin',None,'hash'));c.execute('INSERT INTO auth_onboarding VALUES (?,?,?)',('a',1,None))
+        c.execute('BEGIN IMMEDIATE');c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",('10001','10001','A','developer','0','hash'));c.execute('INSERT INTO auth_onboarding VALUES (?,?,?)',('10001',1,None))
     with IdentityConnection(store,local) as c:
-        row=c.execute('SELECT * FROM auth_users WHERE user_id=?',('a',)).fetchone();assert row['password_hash']=='hash'
-        c.execute('UPDATE auth_users SET version=version+1 WHERE user_id=?',('a',))
+        row=c.execute('SELECT * FROM auth_users WHERE user_id=?',('10001',)).fetchone();assert row['password_hash']=='hash'
+        c.execute('UPDATE auth_users SET version=version+1 WHERE user_id=?',('10001',))
     assert store.snapshot()[1]['auth_users'][0]['version']==2
 
 def test_remote_outage_is_fail_closed_without_exposing_request(tmp_path,monkeypatch):

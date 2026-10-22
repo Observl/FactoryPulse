@@ -8,6 +8,7 @@ import pytest
 # Unit/regression tests must never authenticate against or mutate the operator's D1.
 os.environ.pop("FACTORYPULSE_IDENTITY_CONFIG",None)
 os.environ.pop("FACTORYPULSE_DEPLOYMENT",None)
+os.environ["FACTORYPULSE_GUEST_USER_ID"]="10002"
 
 _test_runtime=tempfile.TemporaryDirectory(prefix="factorypulse-tests-",dir=Path(__file__).resolve().parent)
 os.environ["FACTORYPULSE_AUTH_REQUIRED"]="0"

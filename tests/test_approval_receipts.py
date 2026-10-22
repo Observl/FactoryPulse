@@ -85,9 +85,9 @@ asyncio.run(run())
 def test_receipt_is_bound_to_authenticated_approver():
     from tests.test_security import PASSWORD,login,create_user
     order,_=prepare();body=payload(order)
-    bootstrap=client.post('/api/auth/bootstrap',json={'username':'admin','display_name':'设备管理员','password':PASSWORD})
+    bootstrap=client.post('/api/auth/bootstrap',json={'username':'developer','display_name':'设备管理员','password':PASSWORD})
     assert bootstrap.status_code==200,bootstrap.text
-    admin=login('admin');create_user(admin,'manager02','manager');other=login('manager02')
+    admin=login('developer');create_user(admin,'manager02','admin');other=login('manager02')
     path=f"/api/work-orders/{order['work_order_id']}/approval"
     assert client.post(path,json=body,headers=admin).status_code==200
     assert client.post(path,json=body,headers=other).status_code==409

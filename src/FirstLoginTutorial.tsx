@@ -6,14 +6,14 @@ type User={display_name:string;role:string};
 export function FirstLoginTutorial({user,progress,onCompleted,onLogout}:{user:User;progress:Onboarding;onCompleted:()=>Promise<void>;onLogout:()=>Promise<void>}){
  const [step,setStep]=useState(Math.min(progress.step,4)),[furthest,setFurthest]=useState(progress.step),[understood,setUnderstood]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const title=useRef<HTMLHeadingElement>(null);
- const manager=['admin','manager'].includes(user.role);
- const technician=user.role==='technician';
+ const manager=['developer','admin'].includes(user.role);
+ const technician=user.role==='user';
  const steps=[
   {title:'欢迎使用 FactoryPulse',eyebrow:'先认识你的工作空间',text:`${user.display_name}，你好。接下来用五步了解设备风险与维护流程。教程不会替你创建工单或修改业务数据。`,points:['工作台汇总需要你处理的任务，可按类型和负责人筛选。','页面只显示当前账号有权使用的功能，请使用自己的账号操作。','教程进度跟随账号保存，中途退出后可以继续。'],example:'从工作台待办开始 → 核对设备证据 → 按你的职责处理'},
   {title:'找到设备与数据来源',eyebrow:'设备台账 · 数据中心',text:'先确认你正在查看哪一台设备、哪一批数据，以及数据的采样时间。历史记录不表示设备正在发生现场故障。',points:['设备台账支持搜索与筛选，点击设备可查看趋势和维修履历。','数据中心说明采样范围、缺失、重复和数据版本。','内置验收集为合成数据；人员、订单和费用是明确标识的模拟条件。'],example:'设备编号 → 最新采样时间 → 数据来源与质量'},
   {title:'正确理解风险提醒',eyebrow:'风险中心 · 设备证据',text:'风险分数帮助决定先复核谁，不是经过校准的故障概率。收到提醒后应结合原始工况和维修历史判断。',points:['在风险中心查看模型历史验证、独立故障数量和误报负担。','模型提醒线与页面的风险分段不同，工作台按模型复核标记生成待办。','证据不足不表示设备安全，也不能直接据此批准维修。'],example:'提醒 → 原始工况 → 历史证据 → 人工判断'},
   {title:manager?'从需求到可执行维修':technician?'处理分配给你的维修工单':'查看流程与处理记录',eyebrow:manager?'维护中心 · 资源与审批':technician?'工作台 · 我的维修待办':'维护中心 · 只读查询',text:manager?'复核后创建维护需求，核对人员技能、班次、生产占用、库存和预算，再生成并审批安排。':technician?'只处理分配给你的工单。按现场实际情况记录接单、开工、暂停、恢复和完工。':'你的账号可以查看数据与维护记录，不能创建、审批或执行工单。需要修改时联系设备总管。',points:manager?['方案比较与排程会检查资源约束；存在冲突时先修正条件。','批准和开工前都会重核资源；未经批准的安排不能直接执行。','完工后核对实际工时、费用和每项备件耗用，再验收或退回。']:technician?['先核对设备、维修动作、计划时间和安全要求，再接单与开工。','需要暂停时记录原因，维修结束后填写实际工时、费用和结果。','提交完工后由设备总管验收；不能自行批准或验收工单。']:['从设备详情查看关联订单、维修履历和审计记录。','不同数据版本的工单会保留来源，避免混用旧记录。','不要把模拟收益或合成验证成绩当作工厂实测效果。'],example:manager?'复核 → 需求 → 排程 → 审批 → 执行 → 验收':technician?'接单 → 开工 → 暂停／恢复 → 完工 → 等待验收':'查看设备 → 核对来源 → 追踪工单与履历'},
-  {title:'准备好开始了',eyebrow:'完成教程',text:'完成后进入工作台。这份教程以后不会自动弹出；需要回顾操作流程时，随时打开左侧“帮助”。',points:['所有操作使用你自己的登录身份，处理记录会保留在审计中。',user.role==='admin'?'可在“系统设置 → 账号与权限”中为其他人员创建独立账号。':'账号由管理员管理，权限或人员关联有误时请联系管理员。','离开共享电脑时退出账号，避免他人使用你的身份操作。'],example:'完成教程 → 进入工作台；再次登录直接进入工作空间'}
+  {title:'准备好开始了',eyebrow:'完成教程',text:'完成后进入工作台。这份教程以后不会自动弹出；需要回顾操作流程时，随时打开左侧“帮助”。',points:['所有操作使用你自己的登录身份，处理记录会保留在审计中。',user.role==='developer'?'可在“系统设置 → 账号与权限”中为其他人员创建独立账号。':'账号由管理员管理，权限或人员关联有误时请联系管理员。','离开共享电脑时退出账号，避免他人使用你的身份操作。'],example:'完成教程 → 进入工作台；再次登录直接进入工作空间'}
  ];
  useEffect(()=>{setUnderstood(false);setError('');title.current?.focus()},[step]);
  const next=async()=>{if(busy||!understood)return;setBusy(true);setError('');try{if(step>=furthest){await apiRequest('/auth/onboarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({step:step+1})});setFurthest(step+1)}if(step===4)await onCompleted();else setStep(step+1)}catch(e){setError(errorMessage(e))}finally{setBusy(false)}};

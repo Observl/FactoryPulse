@@ -14,8 +14,10 @@ from pathlib import Path
 import httpx
 from fastapi import HTTPException
 
-TABLES=('auth_users','auth_sessions','auth_attempts','auth_onboarding')
+TABLES=('auth_users','auth_sessions','auth_attempts','auth_onboarding','auth_id_sequence')
 ROOT=Path(__file__).resolve().parents[1]
+ROLE_LABELS={'developer':'开发者','admin':'管理员','user':'普通用户','viewer':'只读用户'}
+ROLE_CODES={label:code for code,label in ROLE_LABELS.items()}
 
 def configuration():
     file=os.environ.get('FACTORYPULSE_IDENTITY_CONFIG')
@@ -48,14 +50,17 @@ class D1Store:
         if not response.is_success or not body.get('success') or any(not r.get('success') for r in body.get('result',[])):
             # Never return remote query text, parameters, secrets, or password hashes.
             message=json.dumps(body.get('errors',[]))
-            if 'fp_identity_guard' in message:raise HTTPException(409,'账号中心记录已变化，请重新执行操作')
+            if 'fp_identity_guard_revision' in message and 'constraint' in message.lower():raise HTTPException(409,'账号中心记录已变化，请重新执行操作')
             raise HTTPException(503,'账号中心暂时无法完成操作，请检查服务端配置')
         return body['result']
 
     def snapshot(self):
-        result=self.batch([{'sql':'SELECT revision FROM fp_identity_revision WHERE id=1'}]+[{'sql':'SELECT * FROM '+table} for table in TABLES])
+        result=self.batch([{'sql':'SELECT revision FROM fp_identity_revision WHERE id=1'}]+[{'sql':'SELECT * FROM '+table} for table in TABLES]+[{'sql':"SELECT COALESCE(MAX(seq),10000) AS high_id FROM sqlite_sequence WHERE name='auth_users'"}])
         if not result[0].get('results'):raise HTTPException(503,'账号中心尚未初始化')
-        return result[0]['results'][0]['revision'],{name:r.get('results',[]) for name,r in zip(TABLES,result[1:])}
+        rows={name:r.get('results',[]) for name,r in zip(TABLES,result[1:])}
+        if rows['auth_id_sequence']:
+            rows['auth_id_sequence'][0]['next_id']=max(rows['auth_id_sequence'][0]['next_id'],int(result[-1]['results'][0]['high_id'])+1)
+        return result[0]['results'][0]['revision'],rows
 
     def commit(self,revision,writes):
         nonce=secrets.token_hex(24)
@@ -71,8 +76,13 @@ class IdentityConnection:
         create_schema(self.db)
         self.db.execute('CREATE TABLE audit_events(event_id INTEGER PRIMARY KEY AUTOINCREMENT,event_type TEXT,entity_id TEXT,content TEXT,created_at TEXT)')
         self.db.execute('CREATE TABLE records(table_name TEXT,row_index INTEGER,content TEXT)')
+        self.db.execute("DELETE FROM auth_id_sequence")
         for table,records in rows.items():
             for record in records:
+                record=dict(record)
+                if table=="auth_users":
+                    record["username"]=str(record["user_id"])
+                    record["role"]=ROLE_CODES.get(record["role"],record["role"])
                 fields=list(record)
                 if any(not re.fullmatch('[a-z_]+',name) for name in fields):raise HTTPException(503,'账号中心结构异常')
                 self.db.execute(f"INSERT INTO {table} ({','.join(fields)}) VALUES ({','.join('?' for _ in fields)})",list(record.values()))
@@ -85,7 +95,19 @@ class IdentityConnection:
         keyword=sql.strip().split()[0].upper()
         if keyword not in {'SELECT','INSERT','UPDATE','DELETE','REPLACE','BEGIN'}:raise RuntimeError('Unsupported identity SQL')
         cursor=self.db.execute(sql,params)
-        if keyword in {'INSERT','UPDATE','DELETE','REPLACE'}:self.writes.append({'sql':sql,'params':list(params)})
+        if keyword in {'INSERT','UPDATE','DELETE','REPLACE'}:
+            remote_sql=sql;remote_params=list(params)
+            # The compatibility snapshot exposes username as the immutable numeric ID;
+            # D1 stores no username column.
+            if re.match(r"INSERT INTO auth_users VALUES",sql,re.I):
+                remote_sql="INSERT INTO auth_users(user_id,display_name,role,staff_id,password_hash,active,version) VALUES (?,?,?,?,?,1,1)"
+                remote_params.pop(1)
+                remote_params[2]=ROLE_LABELS.get(remote_params[2],remote_params[2])
+            elif re.match(r"UPDATE auth_users SET username=\?,",sql,re.I):
+                remote_sql=sql.replace("username=?,", "",1);remote_params.pop(0)
+            if re.match(r"UPDATE auth_users SET display_name=\?,role=\?,",remote_sql,re.I):
+                remote_params[1]=ROLE_LABELS.get(remote_params[1],remote_params[1])
+            self.writes.append({'sql':remote_sql,'params':remote_params})
         return cursor
     def __exit__(self,kind,error,tb):
         try:

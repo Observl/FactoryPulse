@@ -9,7 +9,7 @@ PASSWORD="synthetic-test-password-12345"
 
 def initialize():
     client.post("/api/import",files={"file":("business.xlsx",workbook(),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
-    result=client.post("/api/auth/bootstrap",json={"username":"admin","display_name":"设备管理员","password":PASSWORD})
+    result=client.post("/api/auth/bootstrap",json={"username":"developer","display_name":"设备管理员","password":PASSWORD})
     assert result.status_code==200,result.text
     return {"Cookie":f"{COOKIE}={result.cookies.get(COOKIE)}"}
 
@@ -21,6 +21,7 @@ def login(name,password=PASSWORD):
 
 
 def create_user(admin,name,role,staff_id=None):
+    if staff_id is None and role in {"user","viewer"}:staff_id="1"
     response=client.post("/api/auth/users",headers=admin,json={"username":name,"password":PASSWORD,"display_name":name,"role":role,"staff_id":staff_id})
     assert response.status_code==200,response.text
     return response.json()["user_id"]
@@ -36,7 +37,7 @@ def test_initialization_protects_business_data_without_exposing_credentials():
     assert PASSWORD not in listing.text and "password_hash" not in listing.text
     with connect() as connection:
         stored=connection.execute("SELECT password_hash FROM auth_users").fetchone()[0]
-        assert PASSWORD not in stored and stored.startswith("pbkdf2_sha256$")
+        assert PASSWORD not in stored and len(stored)==64
         token=admin["Cookie"].split("=",1)[1]
         assert not connection.execute("SELECT 1 FROM auth_sessions WHERE token_hash=?",(token,)).fetchone()
 
@@ -51,9 +52,9 @@ def test_viewer_can_read_but_cannot_import_schedule_or_approve():
 
 
 def test_technician_can_only_execute_assigned_work_and_actor_is_verified():
-    admin=initialize();identifier=create_user(admin,"tech001","technician","ST-1");tech=login("tech001")
+    admin=initialize();identifier=create_user(admin,"tech001","user","1");tech=login("tech001")
     with connect() as connection:
-        for work,staff in [("OWN","ST-1"),("OTHER","ST-2")]:
+        for work,staff in [("OWN","1"),("OTHER","2")]:
             content={"work_order_id":work,"equipment_id":"CNC-001","version":1,"staff_id":staff,"dataset_version":settings_get("last_sync_at"),"approval_business_revision":settings_get("business_revision","0"),"start_at":"2026-10-20 08:00:00" if work=="OWN" else "2026-10-20 10:00:00","end_at":"2026-10-20 10:00:00" if work=="OWN" else "2026-10-20 12:00:00"}
             connection.execute("INSERT INTO work_orders VALUES (?,?,?,?,?)",(work,"CNC-001",json.dumps(content),"已批准","2026-10-20"))
     payload={"action":"accept","actor":"伪造姓名","note":"已接单","version":1,"request_id":"assigned-work-request"}
@@ -76,19 +77,19 @@ def test_last_admin_cannot_be_disabled_and_logout_revokes_session():
 
 def test_wrong_password_is_rate_limited_and_untrusted_origin_cannot_mutate():
     admin=initialize()
-    for _ in range(5): assert client.post("/api/auth/login",json={"username":"admin","password":"wrong-password"}).status_code==401
-    assert client.post("/api/auth/login",json={"username":"admin","password":PASSWORD}).status_code==429
+    for _ in range(5): assert client.post("/api/auth/login",json={"username":"developer","password":"wrong-password"}).status_code==401
+    assert client.post("/api/auth/login",json={"username":"developer","password":PASSWORD}).status_code==429
     assert client.post("/api/sync/cnc-demo",headers={**admin,"Origin":"https://untrusted.invalid"}).status_code==403
 
 
 def test_validation_error_does_not_echo_submitted_password():
-    response=client.post("/api/auth/bootstrap",json={"username":"admin","display_name":"","password":PASSWORD})
+    response=client.post("/api/auth/bootstrap",json={"username":"developer","display_name":"","password":PASSWORD})
     assert response.status_code==422
     assert PASSWORD not in response.text and '"input"' not in response.text
 
 
 def test_password_change_revokes_every_old_session_and_records_no_secrets():
-    admin=initialize();second=login("admin")
+    admin=initialize();second=login("developer")
     replacement="replacement-test-password-98765"
     rejected=client.post("/api/auth/password",headers=admin,json={"current_password":"incorrect","new_password":replacement})
     assert rejected.status_code==422
@@ -97,8 +98,8 @@ def test_password_change_revokes_every_old_session_and_records_no_secrets():
     assert result.status_code==200,result.text
     assert client.get("/api/overview",headers=admin).status_code==401
     assert client.get("/api/overview",headers=second).status_code==401
-    assert client.post("/api/auth/login",json={"username":"admin","password":PASSWORD}).status_code==401
-    renewed=login("admin",replacement)
+    assert client.post("/api/auth/login",json={"username":"developer","password":PASSWORD}).status_code==401
+    renewed=login("developer",replacement)
     assert client.get("/api/overview",headers=renewed).status_code==200
     with connect() as connection:
         event=connection.execute("SELECT content FROM audit_events WHERE event_type='auth_password_changed'").fetchone()[0]

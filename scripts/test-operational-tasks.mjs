@@ -30,9 +30,9 @@ assert.equal(operationalTasks(newer,[],[{...oldDue,dataset_version:'old'}],'v1',
 console.log('12 operational task checks passed (no browser/network).');
 
 assert.equal(personalTasks(devices,orders,[],"v1",now,{role:"viewer"}).length,0);
-assert.deepEqual(personalTasks(devices,orders,[],"v1",now,{role:"technician",staff_id:"T1"}).map(t=>t.id),["W1"]);
-assert.equal(personalTasks(devices,orders,[],"v1",now,{role:"technician"}).length,0);
-for(const role of ["admin","manager"]){
+assert.deepEqual(personalTasks(devices,orders,[],"v1",now,{role:"user",staff_id:"T1"}).map(t=>t.id),["W1"]);
+assert.equal(personalTasks(devices,orders,[],"v1",now,{role:"user"}).length,0);
+for(const role of ["developer","admin"]){
  const mine=personalTasks(devices,orders,[],"v1",now,{role});
  assert.equal(mine.some(t=>t.id==="W2"),true);
  assert.equal(mine.some(t=>["W1","W3"].includes(t.id)),false);

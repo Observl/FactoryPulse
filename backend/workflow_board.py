@@ -117,7 +117,7 @@ def install_workflow_routes(app, ctx):
 
     @app.post("/api/work-orders/{identifier}/manage")
     def manage(identifier: str, payload: ManageInput):
-        security.require_roles("admin", "manager")
+        security.require_roles("developer", "admin")
         if payload.action not in {"withdraw", "archive", "restore"}:
             raise HTTPException(422, "未知管理操作")
         if not payload.note.strip():
@@ -172,7 +172,7 @@ def install_workflow_routes(app, ctx):
 
     @app.post("/api/work-orders/{identifier}/timeline")
     def edit_timeline(identifier: str, payload: TimelineInput):
-        security.require_roles("admin", "manager")
+        security.require_roles("developer", "admin")
         signature = json.dumps({"work_order_id": identifier, **payload.model_dump(mode="json", exclude={"request_id"}), **security.actor_metadata()}, sort_keys=True, ensure_ascii=False)
         with lock:
             with connect() as c:

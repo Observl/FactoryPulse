@@ -12,7 +12,7 @@ export function Workbench({devices,dataReady,dataVersion,onOpenDevice,onOpenWork
  const auth=useAuth();
  const [orders,setOrders]=useState<TaskOrder[]>([]),[alerts,setAlerts]=useState<TaskAlert[]>([]),[loaded,setLoaded]=useState(false),[error,setError]=useState(""),[filter,setFilter]=useState("全部"),[query,setQuery]=useState(""),[page,setPage]=useState(1),[now,setNow]=useState(Date.now());
  useEffect(()=>{if(!dataReady)return;let active=true;setLoaded(false);setError("");setPage(1);const load=async()=>{try{const [work,decisions]=await Promise.all([apiRequest("/work-orders"),apiRequest("/alerts")]);if(active){setOrders(work.records||[]);setAlerts(decisions.records||[]);setLoaded(true);setError("");setNow(Date.now())}}catch(reason){if(active)setError(errorMessage(reason))}};void load();const timer=window.setInterval(()=>void load(),30000);return()=>{active=false;window.clearInterval(timer)}},[dataReady,dataVersion]);
- const technician=auth.user?.role==="technician"?auth.user.staff_id||"unassigned-account":undefined;
+ const technician=auth.user?.role==="user"?auth.user.staff_id||"unassigned-account":undefined;
  const tasks=operationalTasks(devices,orders,alerts,dataVersion,now,technician);
  const filtered=tasks.filter(task=>(filter==="全部"||(filter==="逾期待办"?task.overdue:task.category===filter))&&[task.id,task.equipment,task.owner].some(value=>value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())));
  const openTask=(task:typeof tasks[number])=>task.alertId&&onReviewAlert?onReviewAlert(task.alertId):task.deviceId?(onReviewAlert||onOpenDevice)(task.deviceId):onOpenWorkOrder(task.workOrderId!);

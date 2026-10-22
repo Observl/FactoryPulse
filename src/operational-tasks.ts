@@ -45,7 +45,7 @@ export function operationalTasks(devices:TaskDevice[],orders:TaskOrder[],alerts:
 /** Shared management queues are explicit; execution belongs to assigned staff only. */
 export function personalTasks(devices:TaskDevice[],orders:TaskOrder[],alerts:TaskAlert[],version:string,now:number,user:{role:string;staff_id?:string}):OperationalTask[]{
  if(user.role==="viewer")return [];
- if(user.role==="technician")return operationalTasks(devices,orders,alerts,version,now,user.staff_id||"unassigned-account");
- if(!["admin","manager"].includes(user.role))return [];
+ if(user.role==="user")return operationalTasks(devices,orders,alerts,version,now,user.staff_id||"unassigned-account");
+ if(!["developer","admin"].includes(user.role))return [];
  return operationalTasks(devices,orders,alerts,version,now).filter(task=>["预警复核","待审批","待验收","需求排程"].includes(task.category));
 }

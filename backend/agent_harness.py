@@ -59,7 +59,7 @@ def install_harness(app, connect, lock, dispatch):
     def actor(write=False):
         user = security.principal()
         if not user: raise HTTPException(401, "Agent 需要登录后的明确用户")
-        if write and user["role"] not in {"admin", "manager"}: raise HTTPException(403, "当前账号无变更权限")
+        if write and user["role"] not in {"developer", "admin"}: raise HTTPException(403, "当前账号无变更权限")
         return user["user_id"]
 
     def revision(c):
@@ -96,7 +96,7 @@ def install_harness(app, connect, lock, dispatch):
         actor()
         from .agent_config import load_config
         config = load_config()
-        read_only = security.principal()["role"] not in {"admin", "manager"}
+        read_only = security.principal()["role"] not in {"developer", "admin"}
         return {"tools": tool_definitions(read_only, config.disabled_tools), "config": config.model_dump(),
                 "schemas": {m.__name__: m.model_json_schema() for m in (SessionInput, TurnInput, ChangeInput, DecisionInput, MemoryInput, EquipmentInput, StaffInput, OrderInput, ScenarioInput)},
                 "skills": ["risk-review", "maintenance-planning", "change-control"],
@@ -208,7 +208,7 @@ def install_harness(app, connect, lock, dispatch):
                 context = encode({"task": session["task"], "success_criteria": session["success_criteria"], "summary": session["summary"], "turns": session["turns"], "preferences_untrusted": memory, "workflow_guidance": skills,
                                   "change_field_schemas": {name: cls.model_json_schema() for name, cls in MODELS.items()}})
                 result = await run_agent(base, model, _api_key, payload.question, controlled,
-                    read_only=security.principal()["role"] not in {"admin", "manager"}, should_stop=request.is_disconnected,
+                    read_only=security.principal()["role"] not in {"developer", "admin"}, should_stop=request.is_disconnected,
                     enabled_tools=session["tools"], session_context=context,
                     on_progress=lambda budget, trace:store.run(sid,{"status":"running","owner":owner,"budget":budget,"trace":trace},rid))
             result.update(run_id=rid, session_id=sid, permissions=permissions)

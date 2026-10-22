@@ -11,7 +11,7 @@ const labels:Record<string,string>={not_started:"等待首次备份",running:"�
 export function BackupPanel(){
  const auth=useAuth();
  const [status,setStatus]=useState<Status|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState("");
- const allowed=!auth.required||auth.user?.role==="admin";
+ const allowed=!auth.required||auth.user?.role==="developer";
  const load=async()=>{const value:Status=await apiRequest("/backups/status");setStatus(value)};
  useEffect(()=>{if(!allowed)return;let active=true;const refresh=()=>apiRequest("/backups/status").then((value:Status)=>{if(active){setStatus(value);setError("")}}).catch(reason=>{if(active)setError(errorMessage(reason))});void refresh();const timer=window.setInterval(()=>void refresh(),10000);return()=>{active=false;window.clearInterval(timer)}},[allowed]);
  const create=async()=>{if(!allowed)return;setBusy(true);setError("");setMessage("");try{const result:{backup:Snapshot}=await apiRequest("/backups/create",{method:"POST"});setStatus({status:"ready",last_success:result.backup,last_error:""});setMessage("备份已生成并通过完整性检查。恢复能力仍需单独演练。")}catch(reason){setError(errorMessage(reason));await load().catch(()=>{})}finally{setBusy(false)}};

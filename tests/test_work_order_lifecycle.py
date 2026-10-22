@@ -8,7 +8,7 @@ def test_lifecycle_concurrency_idempotency_and_verified_history():
     client.post("/api/import",files={"file":("business.xlsx",workbook(),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
     work_id="WO-LIFECYCLE-TEST"
     with connect() as connection:
-        connection.execute("INSERT OR REPLACE INTO work_orders VALUES (?,?,?,?,?)",(work_id,"CNC-001",json.dumps({"work_order_id":work_id,"equipment_id":"CNC-001","version":1,"dataset_version":settings_get("last_sync_at"),"approval_business_revision":settings_get("business_revision","0"),"staff_id":"ST-1","start_at":"2026-10-20 08:00:00","end_at":"2026-10-20 10:00:00"}),"已批准","2026-10-19"))
+        connection.execute("INSERT OR REPLACE INTO work_orders VALUES (?,?,?,?,?)",(work_id,"CNC-001",json.dumps({"work_order_id":work_id,"equipment_id":"CNC-001","version":1,"dataset_version":settings_get("last_sync_at"),"approval_business_revision":settings_get("business_revision","0"),"staff_id":"1","start_at":"2026-10-20 08:00:00","end_at":"2026-10-20 10:00:00"}),"已批准","2026-10-19"))
     def change(action,version,request_id,**extra):
         return client.post(f"/api/work-orders/{work_id}/transition",json={"action":action,"version":version,"actor":"维修员甲","request_id":request_id,"note":"实际维修记录",**extra})
     assert change("finish",1,"invalid-step").status_code==422

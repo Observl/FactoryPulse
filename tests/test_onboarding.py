@@ -31,7 +31,7 @@ def test_progress_is_ordered_monotonic_idempotent_and_retained_on_relogin():
     assert client.post('/api/auth/onboarding',headers=admin,json={'step':1}).json()==saved
     client.post('/api/auth/logout',headers=admin)
     assert client.get('/api/overview',headers=admin).status_code==401
-    renewed=login('admin')
+    renewed=login('developer')
     assert status(renewed)['onboarding']==saved
     with main.connect() as c:
         assert c.execute("SELECT COUNT(*) FROM audit_events WHERE event_type='onboarding_completed'").fetchone()[0]==1

@@ -65,7 +65,7 @@ function DataImportPanel({busy,filename,recordCount,onImport,onLoadMetro,onLoadN
 }
 export default function App(){
 const [scoreSection,setScoreSection]=useState<string|null>(null);
-const auth=useAuth();const settingsAllowed=!auth.required||auth.user?.role==="admin";
+const auth=useAuth();const settingsAllowed=!auth.required||auth.user?.role==="developer";
 const [overviewReady,setOverviewReady]=useState(false);
 const [focusedWorkOrder,setFocusedWorkOrder]=useState("");
 const [focusedAlert,setFocusedAlert]=useState("");

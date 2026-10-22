@@ -14,7 +14,7 @@ def transition(order,action,request_id=None):
 
 def test_resource_change_blocks_accept_until_withdraw_replan_and_reapprove():
     order,at=prepare();order=approve(order);wid=order['work_order_id']
-    post('/api/resources/staff/ST-1',{'staff_name':'修改班次资料','skills':['机修'],'available_hours':8,'shift_start':at(0),'shift_end':at(10)})
+    post('/api/resources/staff/1',{'staff_name':'修改班次资料','skills':['机修'],'available_hours':8,'shift_start':at(0),'shift_end':at(10)})
     rejected=transition(order,'accept')
     assert rejected.status_code==409 and '资源已变化' in rejected.text
     assert current(wid)['status']=='已批准' and current(wid)['version']==order['version']

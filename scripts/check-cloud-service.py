@@ -4,10 +4,11 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 runtime=tempfile.TemporaryDirectory(prefix='factorypulse-cloud-smoke-');folder=Path(runtime.name)
-(folder/'admin').write_text('isolated-fixture-password-2026',encoding='utf-8');(folder/'key').write_bytes(Fernet.generate_key())
-os.environ.update(FACTORYPULSE_DEPLOYMENT='cloud',FACTORYPULSE_DATA_DIR=str(folder/'data'),FACTORYPULSE_ALLOWED_ORIGINS='https://factorypulse.invalid',FACTORYPULSE_CLOUD_ADMIN_PASSWORD_FILE=str(folder/'admin'),FACTORYPULSE_CREDENTIAL_KEY_FILE=str(folder/'key'))
+(folder/'developer').write_text('isolated-fixture-password-2026',encoding='utf-8');(folder/'key').write_bytes(Fernet.generate_key())
+os.environ.update(FACTORYPULSE_DEPLOYMENT='cloud',FACTORYPULSE_DATA_DIR=str(folder/'data'),FACTORYPULSE_ALLOWED_ORIGINS='https://factorypulse.invalid',FACTORYPULSE_CLOUD_ADMIN_PASSWORD_FILE=str(folder/'developer'),FACTORYPULSE_CREDENTIAL_KEY_FILE=str(folder/'key'))
 os.environ.pop('FACTORYPULSE_IDENTITY_CONFIG',None)
 os.environ['FACTORYPULSE_TEST_ALLOW_ANONYMOUS']='1'
+os.environ['FACTORYPULSE_GUEST_USER_ID']='10002'
 from backend.cloud_server import app
 from fastapi.testclient import TestClient
 client=TestClient(app,base_url='https://factorypulse.invalid',headers={'Origin':'https://factorypulse.invalid'})

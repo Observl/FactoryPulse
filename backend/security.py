@@ -6,7 +6,6 @@ import hmac
 import json
 import os
 import secrets
-import uuid
 from contextvars import ContextVar
 from datetime import datetime,timedelta,timezone
 
@@ -19,11 +18,14 @@ ONBOARDING_STEPS=5
 
 _principal=ContextVar("factorypulse_principal",default=None)
 COOKIE="factorypulse_session"
-ROLES={"admin","manager","technician","viewer"}
+ROLES={"developer","admin","user","viewer"}
+ROLE_NAMES={"developer":"开发者","admin":"管理员","user":"普通用户","viewer":"只读用户"}
 
 
 def create_schema(connection):
     connection.execute("CREATE TABLE IF NOT EXISTS auth_users (user_id TEXT PRIMARY KEY,username TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,role TEXT NOT NULL,staff_id TEXT,password_hash TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,version INTEGER NOT NULL DEFAULT 1)")
+    connection.execute("CREATE TABLE IF NOT EXISTS auth_id_sequence (id INTEGER PRIMARY KEY CHECK(id=1),next_id INTEGER NOT NULL CHECK(next_id>=10001))")
+    connection.execute("INSERT OR IGNORE INTO auth_id_sequence VALUES (1,10001)")
     connection.execute("CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,expires_at TEXT NOT NULL)")
     connection.execute("CREATE TABLE IF NOT EXISTS auth_attempts (attempt_key TEXT PRIMARY KEY,attempts INTEGER NOT NULL,window_start TEXT NOT NULL)")
 
@@ -51,19 +53,19 @@ def require_roles(*roles):
 def check_work_order_action(action,content):
     user=principal()
     if not user: return
-    if user["role"] in {"admin","manager"}: return
-    if user["role"]!="technician" or action not in {"accept","start","pause","resume","finish"}: raise HTTPException(403,"此操作需要设备总管权限")
-    if not user.get("staff_id") or user["staff_id"] not in (content.get("staff_ids") or [content.get("staff_id")]): raise HTTPException(403,"只能处理分配给自己的维修工单")
+    if user["role"] in {"developer","admin"}: return
+    if user["role"]!="user" or action not in {"accept","start","pause","resume","finish"}: raise HTTPException(403,"此操作需要设备总管权限")
+    if not user.get("staff_id") or str(user["staff_id"]) not in [str(value) for value in (content.get("staff_ids") or [content.get("staff_id")])]: raise HTTPException(403,"只能处理分配给自己的维修工单")
 
 
 def password_hash(password):
-    salt=secrets.token_hex(24)
-    digest=hashlib.pbkdf2_hmac("sha256",password.encode(),bytes.fromhex(salt),600000).hex()
-    return f"pbkdf2_sha256$600000${salt}${digest}"
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def verify_password(password,encoded):
     try:
+        if len(encoded)==64 and all(char in "0123456789abcdefABCDEF" for char in encoded):
+            return hmac.compare_digest(password_hash(password),encoded.lower())
         method,rounds,salt,digest=encoded.split("$")
         if method!="pbkdf2_sha256": return False
         actual=hashlib.pbkdf2_hmac("sha256",password.encode(),bytes.fromhex(salt),int(rounds)).hex()
@@ -107,14 +109,15 @@ class ProfileUpdate(BaseModel):
 
 
 class UserInput(BootstrapInput):
+    username:str=Field(default="",max_length=60)
     role:str
-    staff_id:str|None=None
+    staff_id:str|int|None=None
 
 
 class UserUpdate(BaseModel):
     display_name:str=Field(min_length=1,max_length=100)
     role:str
-    staff_id:str|None=None
+    staff_id:str|int|None=None
     active:bool
     version:int=Field(ge=1)
 
@@ -151,11 +154,30 @@ def install_auth(app,connect,lock):
         return response
 
     def admin():
-        if not principal() or principal()["role"]!="admin": raise HTTPException(403,"需要管理员账号")
+        if not principal() or principal()["role"]!="developer": raise HTTPException(403,"需要开发者账号")
 
     def validate_role(c,role,staff_id):
-        if role not in ROLES: raise HTTPException(422,"请选择有效角色")
-        if role=="technician" and (not staff_id or not c.execute("SELECT 1 FROM records WHERE table_name='staff' AND json_extract(content,'$.staff_id')=?",(staff_id,)).fetchone()): raise HTTPException(422,"维修人员账号必须关联已录入的维修人员编号")
+        if role not in ROLES:raise HTTPException(422,"请选择开发者、管理员、普通用户或只读用户")
+        expected={"developer":0,"admin":-1}.get(role)
+        if staff_id is None or str(staff_id).strip()=="":
+            if expected is None:raise HTTPException(422,"普通用户和只读用户需填写正整数人员编号")
+            return str(expected)
+        try:
+            text=str(staff_id).strip()
+            number=int(text)
+            if str(number)!=text:raise ValueError()
+        except (ValueError,TypeError):raise HTTPException(422,"人员编号必须是整数") from None
+        if expected is not None and number!=expected:raise HTTPException(422,"开发者人员编号为0，管理员人员编号为-1")
+        if expected is None and number<=0:raise HTTPException(422,"公司人员编号必须为正整数")
+        return str(number)
+
+    def next_user_id(c):
+        row=c.execute("SELECT next_id FROM auth_id_sequence WHERE id=1").fetchone()
+        candidate=max(10001,int(row[0]))
+        highest=c.execute("SELECT MAX(CAST(user_id AS INTEGER)) FROM auth_users WHERE user_id NOT GLOB '*[^0-9]*' AND user_id<>''").fetchone()[0]
+        candidate=max(candidate,int(highest or 10000)+1)
+        c.execute("UPDATE auth_id_sequence SET next_id=? WHERE id=1",(candidate+1,))
+        return str(candidate)
 
     @app.middleware("http")
     async def protect(request:Request,call_next):
@@ -172,10 +194,10 @@ def install_auth(app,connect,lock):
             if not public and await run_in_threadpool(required):
                 if not user: return JSONResponse({"detail":"请先登录后再操作"},status_code=401)
                 path=request.url.path
-                if path.startswith(("/api/developer/","/api/auth/users")) and user["role"]!="admin": return JSONResponse({"detail":"此功能需要管理员权限"},status_code=403)
+                if path.startswith(("/api/developer/","/api/auth/users")) and user["role"]!="developer": return JSONResponse({"detail":"此功能需要开发者权限"},status_code=403)
                 if request.method not in {"GET","HEAD"} and not path.startswith(("/api/auth/","/api/copilot/chat","/api/copilot/sessions")):
                     transition=path.startswith("/api/work-orders/") and path.endswith("/transition")
-                    allowed_roles={"admin","manager","technician"} if transition else {"admin","manager"}
+                    allowed_roles={"developer","admin","user"} if transition else {"developer","admin"}
                     if user["role"] not in allowed_roles: return JSONResponse({"detail":"当前账号仅可查看，不能修改或审批维护任务"},status_code=403)
             return await call_next(request)
         except HTTPException as exc:return JSONResponse({'detail':exc.detail},status_code=exc.status_code)
@@ -190,7 +212,8 @@ def install_auth(app,connect,lock):
             with connect() as c:
                 row=c.execute("SELECT step,completed_at FROM auth_onboarding WHERE user_id=?",(user["user_id"],)).fetchone()
             onboarding={"step":row["step"] if row else 0,"completed_at":row["completed_at"] if row else None,"total_steps":ONBOARDING_STEPS}
-        return {"required":required(),"setup_needed":not exists,"mode":"accounts" if required() else "local_single_operator","guest_available":bool(identity_configuration()) or cloud_enabled(),"identity_provider":"cloudflare_d1" if identity_configuration() else "sqlite","user":user,"onboarding":onboarding}
+        with connect() as c:guest_exists=c.execute("SELECT 1 FROM auth_users WHERE user_id=? AND role='viewer' AND active=1",(GUEST_ID,)).fetchone() if GUEST_ID else None
+        return {"required":required(),"setup_needed":not exists,"mode":"accounts" if required() else "local_single_operator","guest_available":bool(GUEST_ID) and bool(guest_exists),"identity_provider":"cloudflare_d1" if identity_configuration() else "sqlite","user":user,"onboarding":onboarding}
 
     @app.post('/api/auth/guest')
     def guest_login(request:Request):
@@ -225,11 +248,12 @@ def install_auth(app,connect,lock):
         name=username(payload.username);validate_password(payload.password)
         if not payload.display_name.strip(): raise HTTPException(422,"请填写管理员姓名")
         encoded=password_hash(payload.password)
-        user={"user_id":uuid.uuid4().hex,"username":name,"display_name":payload.display_name.strip(),"role":"admin","staff_id":None,"version":1}
+        user={"user_id":"","username":name,"display_name":payload.display_name.strip(),"role":"developer","staff_id":"0","version":1}
         with lock,connect() as c:
             c.execute("BEGIN IMMEDIATE")
             if c.execute("SELECT 1 FROM auth_users LIMIT 1").fetchone(): raise HTTPException(409,"管理员已初始化，请直接登录")
-            c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",(user["user_id"],name,user["display_name"],"admin",None,encoded))
+            user["user_id"]=next_user_id(c)
+            c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",(user["user_id"],name,user["display_name"],"developer","0",encoded))
             c.execute("INSERT INTO audit_events(event_type,entity_id,content,created_at) VALUES (?,?,?,?)",("auth_initialized",user["user_id"],json.dumps({"username":name}),datetime.now(timezone.utc).isoformat()))
         return session(user,request)
 
@@ -243,7 +267,7 @@ def install_auth(app,connect,lock):
             recent=previous and datetime.fromisoformat(previous["window_start"])>now-timedelta(minutes=10)
             if recent and previous["attempts"]>=5: raise HTTPException(429,"尝试次数过多，请10分钟后重试")
             c.execute("INSERT OR REPLACE INTO auth_attempts VALUES (?,?,?)",(attempt,previous["attempts"]+1 if recent else 1,previous["window_start"] if recent else now.isoformat()))
-            row=c.execute("SELECT * FROM auth_users WHERE username=?",(name,)).fetchone()
+            row=c.execute("SELECT * FROM auth_users WHERE user_id=? OR username=? ORDER BY CASE WHEN user_id=? THEN 0 ELSE 1 END LIMIT 1",(name,name,name)).fetchone()
         valid=verify_password(payload.password,row["password_hash"] if row else dummy)
         if not row or not row["active"] or not valid: raise HTTPException(401,"账号或密码不正确")
         with lock,connect() as c: c.execute("DELETE FROM auth_attempts WHERE attempt_key=?",(attempt,))
@@ -260,7 +284,7 @@ def install_auth(app,connect,lock):
     def change_password(payload:PasswordChange):
         user=principal()
         if not user: raise HTTPException(401,"请先登录后修改密码")
-        if user['user_id']==GUEST_ID:raise HTTPException(403,'共享访客不能修改密码')
+        if user['user_id']==GUEST_ID and user['role']=='viewer':raise HTTPException(403,'共享访客不能修改密码')
         validate_password(payload.new_password)
         if payload.current_password==payload.new_password: raise HTTPException(422,"新密码不能与当前密码相同")
         now=datetime.now(timezone.utc)
@@ -289,14 +313,14 @@ def install_auth(app,connect,lock):
     def update_profile(payload:ProfileUpdate):
         user=principal()
         if not user: raise HTTPException(401,"请先登录")
-        if user["role"] not in {"admin","manager"}: raise HTTPException(403,"当前角色不能修改账号名称")
-        name=username(payload.username);display=payload.display_name.strip()
+        if user["role"] not in {"developer","admin"}: raise HTTPException(403,"当前角色不能修改账号名称")
+        name=str(user["user_id"]) if identity_configuration() else username(payload.username);display=payload.display_name.strip()
         if not display: raise HTTPException(422,"名称不能全部为空格")
         with lock,connect() as c:
             c.execute("BEGIN IMMEDIATE")
             old=c.execute("SELECT * FROM auth_users WHERE user_id=? AND active=1",(user["user_id"],)).fetchone()
             if not old or old["version"]!=payload.version: raise HTTPException(409,"账号已更新，请刷新后重试")
-            if old["role"] not in {"admin","manager"}: raise HTTPException(403,"当前角色不能修改账号名称")
+            if old["role"] not in {"developer","admin"}: raise HTTPException(403,"当前角色不能修改账号名称")
             if c.execute("SELECT 1 FROM auth_users WHERE username=? AND user_id<>?",(name,user["user_id"])).fetchone(): raise HTTPException(409,"账号名已存在")
             c.execute("UPDATE auth_users SET username=?,display_name=?,version=version+1 WHERE user_id=?",(name,display,user["user_id"]))
             c.execute("INSERT INTO audit_events(event_type,entity_id,content,created_at) VALUES (?,?,?,?)",("auth_profile_updated",user["user_id"],json.dumps({"username":name,**actor_metadata()},ensure_ascii=False),datetime.now(timezone.utc).isoformat()))
@@ -310,30 +334,32 @@ def install_auth(app,connect,lock):
 
     @app.post("/api/auth/users")
     def create_user(payload:UserInput):
-        admin();name=username(payload.username);validate_password(payload.password)
+        admin();name=username(payload.username) if payload.username.strip() else "";validate_password(payload.password)
         if not payload.display_name.strip(): raise HTTPException(422,"请填写人员姓名，不能全部为空格")
         encoded=password_hash(payload.password)
         with lock,connect() as c:
-            c.execute("BEGIN IMMEDIATE");validate_role(c,payload.role,payload.staff_id)
+            c.execute("BEGIN IMMEDIATE");staff_id=validate_role(c,payload.role,payload.staff_id)
             if c.execute("SELECT 1 FROM auth_users WHERE username=?",(name,)).fetchone(): raise HTTPException(409,"账号名已存在")
-            identifier=uuid.uuid4().hex
-            c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",(identifier,name,payload.display_name.strip(),payload.role,payload.staff_id,encoded))
+            identifier=next_user_id(c)
+            name=identifier if identity_configuration() else name or identifier
+            c.execute("INSERT INTO auth_users VALUES (?,?,?,?,?,?,1,1)",(identifier,name,payload.display_name.strip(),payload.role,staff_id,encoded))
             c.execute("INSERT INTO audit_events(event_type,entity_id,content,created_at) VALUES (?,?,?,?)",("auth_user_created",identifier,json.dumps({"username":name,"role":payload.role,**actor_metadata()},ensure_ascii=False),datetime.now(timezone.utc).isoformat()))
         return {"success":True,"user_id":identifier}
 
     @app.post("/api/auth/users/{identifier}")
     def update_user(identifier:str,payload:UserUpdate):
         admin()
-        if identifier==GUEST_ID:raise HTTPException(403,'共享访客权限由部署配置管理，不能提升权限')
         if not payload.display_name.strip(): raise HTTPException(422,"请填写人员姓名，不能全部为空格")
         with lock,connect() as c:
-            c.execute("BEGIN IMMEDIATE");validate_role(c,payload.role,payload.staff_id)
+            c.execute("BEGIN IMMEDIATE")
             old=c.execute("SELECT * FROM auth_users WHERE user_id=?",(identifier,)).fetchone()
             if not old: raise HTTPException(404,"账号不存在")
+            if identifier==GUEST_ID and old["role"]=="viewer":raise HTTPException(403,"共享访客权限由部署配置管理，不能提升权限")
             if payload.version!=old["version"]: raise HTTPException(409,"账号信息已更新，请刷新")
             if payload.display_name.strip()!=old["display_name"] and principal()["user_id"]!=identifier: raise HTTPException(403,"名称只能由账号本人修改")
-            if old["role"]=="admin" and old["active"] and (not payload.active or payload.role!="admin") and c.execute("SELECT COUNT(*) FROM auth_users WHERE role='admin' AND active=1").fetchone()[0]<=1: raise HTTPException(409,"不能停用或降级最后一个管理员")
-            c.execute("UPDATE auth_users SET display_name=?,role=?,staff_id=?,active=?,version=version+1 WHERE user_id=?",(payload.display_name.strip(),payload.role,payload.staff_id,int(payload.active),identifier))
+            if old["role"]=="developer" and old["active"] and (not payload.active or payload.role!="developer") and c.execute("SELECT COUNT(*) FROM auth_users WHERE role='developer' AND active=1").fetchone()[0]<=1: raise HTTPException(409,"不能停用或降级最后一个开发者")
+            staff_id=validate_role(c,payload.role,payload.staff_id)
+            c.execute("UPDATE auth_users SET display_name=?,role=?,staff_id=?,active=?,version=version+1 WHERE user_id=?",(payload.display_name.strip(),payload.role,staff_id,int(payload.active),identifier))
             if not payload.active: c.execute("DELETE FROM auth_sessions WHERE user_id=?",(identifier,))
             c.execute("INSERT INTO audit_events(event_type,entity_id,content,created_at) VALUES (?,?,?,?)",("auth_user_updated",identifier,json.dumps({"role":payload.role,"active":payload.active,**actor_metadata()},ensure_ascii=False),datetime.now(timezone.utc).isoformat()))
         return {"success":True,"version":payload.version+1}
