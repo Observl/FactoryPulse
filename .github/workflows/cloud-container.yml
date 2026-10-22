@@ -1,0 +1,16 @@
+name: Full cloud container validation
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  full-cloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build full application image
+        run: docker build --build-arg BUILD_COMMIT=${{ github.sha }} -t factorypulse-cloud:test .
+      - name: Exercise real cloud service with isolated accounts and dataset
+        run: |
+          docker run --rm --entrypoint python -v "$PWD/scripts/check-cloud-service.py:/app/scripts/check-cloud-service.py:ro" factorypulse-cloud:test /app/scripts/check-cloud-service.py

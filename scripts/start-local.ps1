@@ -13,6 +13,8 @@ $buildCheck = & $pythonExecutable (Join-Path $projectDirectory 'backend\build_ar
 if ($LASTEXITCODE -ne 0) { throw "本地界面校验失败：$buildCheck" }
 if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) { throw "端口 $Port 已被占用，请停止旧服务或选择其他端口。" }
 if (-not $env:FACTORYPULSE_DATA_DIR) { $env:FACTORYPULSE_DATA_DIR = Join-Path $env:LOCALAPPDATA 'FactoryPulse\data' }
+$identityConfiguration = Join-Path $projectDirectory '.secrets\identity.json'
+if (-not $env:FACTORYPULSE_IDENTITY_CONFIG -and (Test-Path -LiteralPath $identityConfiguration)) { $env:FACTORYPULSE_IDENTITY_CONFIG = $identityConfiguration }
 $env:FACTORYPULSE_SERVE_UI = '1'
 $env:FACTORYPULSE_UI_DIR = Join-Path $projectDirectory 'dist'
 $env:FACTORYPULSE_ALLOWED_ORIGINS = "http://127.0.0.1:$Port,http://localhost:$Port"

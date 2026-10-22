@@ -1,0 +1,49 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
+    restart: unless-stopped
+    environment:
+      FACTORYPULSE_ALLOWED_ORIGINS: https://${FACTORYPULSE_DOMAIN:?Set FACTORYPULSE_DOMAIN}
+      FACTORYPULSE_CLOUD_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      FACTORYPULSE_CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+      FACTORYPULSE_IDENTITY_CONFIG: /run/secrets/identity_config
+    secrets:
+      - admin_password
+      - credential_key
+      - identity_config
+      - d1_token
+    volumes:
+      - factorypulse_data:/data
+    expose:
+      - '8000'
+  gateway:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      FACTORYPULSE_DOMAIN: ${FACTORYPULSE_DOMAIN:?Set FACTORYPULSE_DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+secrets:
+  admin_password:
+    file: ./.secrets/cloud-admin-password
+  credential_key:
+    file: ./.secrets/cloud-credential-key
+  identity_config:
+    file: ./.secrets/identity.container.json
+  d1_token:
+    file: ./.secrets/cloudflare-d1-token
+volumes:
+  factorypulse_data:
+  caddy_data:
+  caddy_config:

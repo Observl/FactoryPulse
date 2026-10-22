@@ -13,6 +13,7 @@ from datetime import datetime,timedelta,timezone
 from fastapi import HTTPException,Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field
+from starlette.concurrency import run_in_threadpool
 
 ONBOARDING_STEPS=5
 
@@ -119,10 +120,13 @@ class UserUpdate(BaseModel):
 
 
 def install_auth(app,connect,lock):
+    from .d1_identity import wrap_connection,configuration as identity_configuration
+    from .cloud_mode import enabled as cloud_enabled,GUEST_ID
+    connect=wrap_connection(connect)
     dummy=password_hash("timing-comparison-only-not-an-account")
     def required():
         with connect() as c:
-            return os.environ.get("FACTORYPULSE_TEST_ALLOW_ANONYMOUS")!="1" or os.environ.get("FACTORYPULSE_AUTH_REQUIRED")=="1" or bool(c.execute("SELECT 1 FROM auth_users LIMIT 1").fetchone())
+            return bool(identity_configuration()) or cloud_enabled() or os.environ.get("FACTORYPULSE_TEST_ALLOW_ANONYMOUS")!="1" or os.environ.get("FACTORYPULSE_AUTH_REQUIRED")=="1" or bool(c.execute("SELECT 1 FROM auth_users LIMIT 1").fetchone())
 
     def find_user(request):
         token=request.cookies.get(COOKIE)
@@ -160,11 +164,12 @@ def install_auth(app,connect,lock):
         origin=request.headers.get("origin")
         allowed=set(os.environ.get("FACTORYPULSE_ALLOWED_ORIGINS","http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://localhost:8000").split(","))
         if request.method not in {"GET","HEAD"} and origin and origin.rstrip("/") not in allowed: return JSONResponse({"detail":"此来源不能修改本地设备数据"},status_code=403)
-        user=find_user(request)
+        try:user=await run_in_threadpool(find_user,request)
+        except HTTPException as exc:return JSONResponse({'detail':exc.detail},status_code=exc.status_code)
         token=_principal.set(user)
         try:
-            public=request.url.path in {"/api/health","/api/auth/status","/api/auth/login","/api/auth/bootstrap","/api/auth/logout"}
-            if required() and not public:
+            public=request.url.path in {"/api/health","/api/auth/status","/api/auth/login","/api/auth/bootstrap","/api/auth/logout","/api/auth/guest"}
+            if not public and await run_in_threadpool(required):
                 if not user: return JSONResponse({"detail":"请先登录后再操作"},status_code=401)
                 path=request.url.path
                 if path.startswith(("/api/developer/","/api/auth/users")) and user["role"]!="admin": return JSONResponse({"detail":"此功能需要管理员权限"},status_code=403)
@@ -173,6 +178,7 @@ def install_auth(app,connect,lock):
                     allowed_roles={"admin","manager","technician"} if transition else {"admin","manager"}
                     if user["role"] not in allowed_roles: return JSONResponse({"detail":"当前账号仅可查看，不能修改或审批维护任务"},status_code=403)
             return await call_next(request)
+        except HTTPException as exc:return JSONResponse({'detail':exc.detail},status_code=exc.status_code)
         finally: _principal.reset(token)
 
     @app.get("/api/auth/status")
@@ -184,7 +190,16 @@ def install_auth(app,connect,lock):
             with connect() as c:
                 row=c.execute("SELECT step,completed_at FROM auth_onboarding WHERE user_id=?",(user["user_id"],)).fetchone()
             onboarding={"step":row["step"] if row else 0,"completed_at":row["completed_at"] if row else None,"total_steps":ONBOARDING_STEPS}
-        return {"required":required(),"setup_needed":not exists,"mode":"accounts" if required() else "local_single_operator","user":user,"onboarding":onboarding}
+        return {"required":required(),"setup_needed":not exists,"mode":"accounts" if required() else "local_single_operator","deployment":"cloud" if cloud_enabled() else "local","identity_provider":"cloudflare_d1" if identity_configuration() else "sqlite","user":user,"onboarding":onboarding}
+
+    @app.post('/api/auth/guest')
+    def guest_login(request:Request):
+        if not cloud_enabled():raise HTTPException(404,'本地服务不提供免密访客入口')
+        with connect() as c:
+            row=c.execute("SELECT * FROM auth_users WHERE user_id=? AND role='viewer' AND active=1",(GUEST_ID,)).fetchone()
+        if not row:raise HTTPException(503,'访客账号尚未配置')
+        if principal() and principal()['user_id']==GUEST_ID:return {"success":True}
+        return session(dict(row),request)
 
     @app.post("/api/auth/onboarding")
     def onboarding_progress(payload:OnboardingProgress):
@@ -205,6 +220,7 @@ def install_auth(app,connect,lock):
 
     @app.post("/api/auth/bootstrap")
     def bootstrap(payload:BootstrapInput,request:Request):
+        if cloud_enabled() or identity_configuration():raise HTTPException(403,'集中账号中心需由部署管理员初始化')
         if not request.client or request.client.host not in {"127.0.0.1","::1","localhost"}: raise HTTPException(403,"首次管理员必须在服务所在电脑上初始化")
         name=username(payload.username);validate_password(payload.password)
         if not payload.display_name.strip(): raise HTTPException(422,"请填写管理员姓名")
@@ -228,6 +244,7 @@ def install_auth(app,connect,lock):
             if recent and previous["attempts"]>=5: raise HTTPException(429,"尝试次数过多，请10分钟后重试")
             c.execute("INSERT OR REPLACE INTO auth_attempts VALUES (?,?,?)",(attempt,previous["attempts"]+1 if recent else 1,previous["window_start"] if recent else now.isoformat()))
             row=c.execute("SELECT * FROM auth_users WHERE username=?",(name,)).fetchone()
+            if not row and cloud_enabled():row=c.execute("SELECT * FROM auth_users WHERE user_id='test' AND lower(display_name)=?",(name,)).fetchone()
         valid=verify_password(payload.password,row["password_hash"] if row else dummy)
         if not row or not row["active"] or not valid: raise HTTPException(401,"账号或密码不正确")
         with lock,connect() as c: c.execute("DELETE FROM auth_attempts WHERE attempt_key=?",(attempt,))
@@ -244,6 +261,7 @@ def install_auth(app,connect,lock):
     def change_password(payload:PasswordChange):
         user=principal()
         if not user: raise HTTPException(401,"请先登录后修改密码")
+        if user['user_id']==GUEST_ID:raise HTTPException(403,'共享访客不能修改密码')
         validate_password(payload.new_password)
         if payload.current_password==payload.new_password: raise HTTPException(422,"新密码不能与当前密码相同")
         now=datetime.now(timezone.utc)
@@ -307,6 +325,7 @@ def install_auth(app,connect,lock):
     @app.post("/api/auth/users/{identifier}")
     def update_user(identifier:str,payload:UserUpdate):
         admin()
+        if identifier==GUEST_ID:raise HTTPException(403,'共享访客权限由部署配置管理，不能提升权限')
         if not payload.display_name.strip(): raise HTTPException(422,"请填写人员姓名，不能全部为空格")
         with lock,connect() as c:
             c.execute("BEGIN IMMEDIATE");validate_role(c,payload.role,payload.staff_id)

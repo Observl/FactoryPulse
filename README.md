@@ -127,6 +127,8 @@ GitHub Pages 自动显示线上展示登录：只读用户一键进入；管理�
 
 ## 文档
 
+- [完整云端部署与 Cloudflare D1 账号中心](docs/CLOUD-DEPLOYMENT.md)
+
 - [完整决策计划思维导图](docs/DECISION-MAP.md)
 - [统一按钮组件模板与布局约束](docs/BUTTON-COMPONENTS.md)
 - [评分计算说明与排程约束](docs/SCORING-AND-SCHEDULING.md)

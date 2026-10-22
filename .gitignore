@@ -28,3 +28,4 @@ outputs/
 .pytest_cache/
 *.sqlite3-*
 *.db-*
+.secrets/
