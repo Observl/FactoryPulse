@@ -1,4 +1,4 @@
-param([int]$Port = 8000)
+﻿param([int]$Port = 8000)
 $ErrorActionPreference = 'Stop'
 if ($Port -lt 1024 -or $Port -gt 65535) { throw '端口需在1024至65535之间。' }
 $projectDirectory = Split-Path -Parent $PSScriptRoot
