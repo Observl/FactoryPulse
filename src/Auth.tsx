@@ -5,12 +5,10 @@ import {useUnsavedChanges} from "./useUnsavedChanges";
 import {createContext,useCallback,useContext,useEffect,useRef,useState,type ReactNode} from "react";
 import {FirstLoginTutorial} from "./FirstLoginTutorial";
 import {apiRequest,errorMessage} from "./api";
-import {runtimeMode} from './runtime-mode';
-import {CloudAuthGate} from './CloudAuth';
 
 type User={user_id:string;username:string;display_name:string;role:string;staff_id?:string;version:number};
 export type Onboarding={step:number;completed_at:string|null;total_steps:number};
-type Status={required:boolean;setup_needed:boolean;mode:string;deployment?:'local'|'cloud';identity_provider?:string;user:User|null;onboarding?:Onboarding|null};
+type Status={required:boolean;setup_needed:boolean;mode:string;guest_available?:boolean;identity_provider?:string;user:User|null;onboarding?:Onboarding|null};
 type AuthValue=Status&{canManage:boolean;refresh:()=>Promise<void>;logout:()=>Promise<void>};
 const initial:Status={required:true,setup_needed:true,mode:"accounts",user:null};
 const AuthContext=createContext<AuthValue>({...initial,canManage:false,refresh:async()=>{},logout:async()=>{}});
@@ -19,20 +17,15 @@ export const useAuth=()=>useContext(AuthContext);
 const post=(value:unknown):RequestInit=>({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(value)});
 
 export function AuthGate({children}:{children:ReactNode}){
- if(runtimeMode==='cloud')return <CloudAuthGate>{(user,logout)=><AuthContext.Provider value={{required:true,setup_needed:false,mode:'cloud_demo',user,onboarding:{step:5,completed_at:'cloud-demo',total_steps:5},canManage:user.role==='admin',refresh:async()=>{},logout}}>{children}</AuthContext.Provider>}</CloudAuthGate>;
- return <LocalAuthGate>{children}</LocalAuthGate>;
-}
-function LocalAuthGate({children}:{children:ReactNode}){
- const staticDemo=import.meta.env.VITE_STATIC_DEMO==="true";
  const [authorizedIdentity,setAuthorizedIdentity]=useState("local"),[status,setStatus]=useState<Status>(initial),[ready,setReady]=useState(false),[everAuthorized,setEverAuthorized]=useState(false),[error,setError]=useState("");
  const generation=useRef(0);
- const refresh=useCallback(async()=>{const revision=++generation.current;try{const next:Status=await apiRequest("/auth/status");if(revision!==generation.current)return;setStatus(next);setReady(true);setError("");if(next.user){setEverAuthorized(true);setAuthorizedIdentity(next.user?.user_id||"local")}}catch(reason){if(revision===generation.current){setError(errorMessage(reason));setReady(true)}}},[staticDemo]);
+ const refresh=useCallback(async()=>{const revision=++generation.current;try{const next:Status=await apiRequest("/auth/status");if(revision!==generation.current)return;setStatus(next);setReady(true);setError("");if(next.user){setEverAuthorized(true);setAuthorizedIdentity(next.user?.user_id||"local")}}catch(reason){if(revision===generation.current){setError(errorMessage(reason));setReady(true)}}},[]);
  useEffect(()=>{void refresh();const expired=()=>void refresh();window.addEventListener("factorypulse:auth-expired",expired);return()=>window.removeEventListener("factorypulse:auth-expired",expired)},[refresh]);
  const logout=async()=>{await apiRequest("/auth/logout",{method:"POST"});generation.current++;setEverAuthorized(false);setStatus(old=>({...old,user:null,onboarding:null}))};
  const locked=!ready||!!error||!status.user;
  const tutorial=!locked&&!!status.user&&!status.onboarding?.completed_at;
  const value={...status,canManage:!!status.user&&["admin","manager"].includes(status.user.role),refresh,logout};
- return <AuthContext.Provider value={value}>{everAuthorized&&!locked&&!tutorial&&<div key={authorizedIdentity}>{children}</div>}{tutorial&&status.user&&<FirstLoginTutorial key={status.user.user_id} user={status.user} progress={status.onboarding||{step:0,completed_at:null,total_steps:5}} onCompleted={refresh} onLogout={logout}/>} {locked&&<main className="auth-frame"><section className="panel"><h1>FactoryPulse</h1><p className="hint">{status.deployment==="cloud"?"云端完整服务版 · 连接账号中心":status.identity_provider==="cloudflare_d1"?"本地服务版 · 连接账号中心":"本地服务版 · 使用本机账号登录"}</p>{!ready?<p role="status">正在连接设备管理服务…</p>:error?<><p className="alert error" role="alert">{staticDemo?"此页面需要连接账号服务。请打开本地服务版并登录管理账号。":error}</p><Button className="primary" onClick={()=>void refresh()}>重新连接</Button></>:<LoginForm setup={status.setup_needed} cloud={status.deployment==="cloud"} onLoggedIn={refresh}/>}</section></main>}</AuthContext.Provider>;
+ return <AuthContext.Provider value={value}>{everAuthorized&&!locked&&!tutorial&&<div key={authorizedIdentity}>{children}</div>}{tutorial&&status.user&&<FirstLoginTutorial key={status.user.user_id} user={status.user} progress={status.onboarding||{step:0,completed_at:null,total_steps:5}} onCompleted={refresh} onLogout={logout}/>} {locked&&<main className="auth-frame"><section className="panel"><h1>FactoryPulse</h1><p className="hint">连接 Cloudflare 账号中心</p>{!ready?<p role="status">正在连接设备管理服务…</p>:error?<><p className="alert error" role="alert">{error}</p><Button className="primary" onClick={()=>void refresh()}>重新连接</Button></>:<LoginForm setup={status.setup_needed} cloud={status.guest_available===true} onLoggedIn={refresh}/>}</section></main>}</AuthContext.Provider>;
 }
 
 function LoginForm({setup,cloud=false,onLoggedIn}:{setup:boolean;cloud?:boolean;onLoggedIn:()=>Promise<void>}){
@@ -49,13 +42,12 @@ export function SessionBadge(){
 
 type Account=User&{active:number|boolean};
 export function SecurityPanel(){
- const auth=useAuth(),staticDemo=import.meta.env.VITE_STATIC_DEMO==="true";
+ const auth=useAuth();
  const [open,setOpen]=useState(false),[accounts,setAccounts]=useState<Account[]>([]),[staff,setStaff]=useState<{staff_id:string;staff_name?:string}[]>([]),[editing,setEditing]=useState<Account|null>(null),[username,setUsername]=useState(""),[name,setName]=useState(""),[password,setPassword]=useState(""),[role,setRole]=useState("viewer"),[staffId,setStaffId]=useState(""),[active,setActive]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState("");
  const load=useCallback(async()=>{if(!auth.user||auth.user.role!=="admin")return;try{const [users,people]=await Promise.all([apiRequest("/auth/users"),apiRequest("/records/staff?limit=5000")]);setAccounts(users.records);setStaff(people.records)}catch(reason){setError(errorMessage(reason))}},[auth.user?.user_id,auth.user?.role]);
  useEffect(()=>{if(open)void load()},[open,load]);
  const reset=()=>{setEditing(null);setUsername("");setName("");setPassword("");setRole("viewer");setStaffId("");setActive(true)};
  const submit=async()=>{setBusy(true);setError("");try{if(!auth.required){await apiRequest("/auth/bootstrap",post({username,display_name:name,password}));setPassword("");await auth.refresh();setMessage("账号保护已启用。请妥善保管管理员密码。")}else if(editing){await apiRequest(`/auth/users/${editing.user_id}`,post({display_name:name,role,staff_id:role==="technician"?staffId:null,active,version:editing.version}));await auth.refresh();setMessage("账号权限已更新")}else{await apiRequest("/auth/users",post({username,display_name:name,password,role,staff_id:role==="technician"?staffId:null}));setMessage("账号已创建，初始密码请通过公司认可的方式交给本人")}reset();await load()}catch(reason){setError(errorMessage(reason))}finally{setBusy(false)}};
- if(staticDemo)return null;
  if(auth.required&&auth.user?.role!=="admin")return null;
  return <details className="panel security-panel" onToggle={event=>setOpen(event.currentTarget.open)}><summary>创建与管理账号 · {auth.required?"已启用":"本地单人模式"}</summary>{error&&<p className="alert error" role="alert">{error}</p>}{message&&<p className="alert success" aria-live="polite">{message}</p>}{!auth.required&&<p className="hint">启用后，审批和验收按账号权限执行，操作人自动记入记录。</p>}{accounts.length>0&&<div className="table-scroll"><table><thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>状态</th><th>操作</th></tr></thead><tbody>{accounts.map(account=><tr key={account.user_id}><td>{account.username}</td><td>{account.display_name}</td><td>{roleNames[account.role]}</td><td>{account.active?"启用":"停用"}</td><td><Button disabled={busy} onClick={()=>{setEditing(account);setUsername(account.username);setName(account.display_name);setRole(account.role);setStaffId(account.staff_id||"");setActive(!!account.active);setPassword("")}}>编辑权限</Button></td></tr>)}</tbody></table></div>}<form onSubmit={event=>{event.preventDefault();void submit()}}><h3>{!auth.required?"设置首个管理员":editing?"编辑账号权限":"新增账号"}</h3><div className="form-grid"><label>账号<input required readOnly={!!editing} value={username} onChange={event=>setUsername(event.target.value)} autoComplete="off"/></label><label>姓名<input required readOnly={!!editing&&editing.user_id!==auth.user?.user_id} value={name} onChange={event=>setName(event.target.value)}/></label>{!editing&&<label>初始密码<input required type="password" minLength={12} maxLength={256} autoComplete="new-password" value={password} onChange={event=>setPassword(event.target.value)}/></label>}{auth.required&&<label>角色<select value={role} onChange={event=>setRole(event.target.value)}>{Object.entries(roleNames).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}{role==="technician"&&auth.required&&<label>关联维修人员<select required value={staffId} onChange={event=>setStaffId(event.target.value)}><option value="">请选择</option>{staff.map(person=><option key={person.staff_id} value={person.staff_id}>{person.staff_name||person.staff_id} · {person.staff_id}</option>)}</select></label>}</div>{editing&&<label className="check-line"><input type="checkbox" checked={active} onChange={event=>setActive(event.target.checked)}/>允许此账号登录</label>}<div className="actions"><Button className="primary" disabled={busy} type="submit" busy={busy} busyLabel="正在保存…">{!auth.required?"启用账号保护":editing?"保存权限":"创建账号"}</Button>{editing&&<Button type="button" disabled={busy} onClick={reset}>取消编辑</Button>}</div></form></details>;
 }

@@ -1,6 +1,6 @@
 # 完整云端部署与集中账号
 
-完整云端运行同一套 React 页面、Python API、训练解释、SQL/Excel 导入、联合排程、审批、库存、时间轴、助手、备份恢复和审计。与本地的产品差异仅为登录入口：云端有免密只读访客，本地仍要求账号密码。真实业务版本不使用 `VITE_STATIC_DEMO=true`，也不模拟业务成功。
+所有环境运行同一套 React 页面、Python API、训练解释、SQL/Excel 导入、联合排程、审批、库存、时间轴、助手、备份恢复和审计。登录入口完全一致，账号统一使用 Cloudflare D1，访客一键进入，管理员输入账号密码。没有独立精简版或模拟业务成功。
 
 ## 部署包
 
@@ -33,9 +33,9 @@
 .venv\Scripts\python.exe scripts/migrate-d1-identity.py --source .env.runtime/data/factorypulse.sqlite3 --config .secrets/identity.json --admin-password-file .secrets/cloud-admin-password
 ```
 
-迁移只向空账号库写入；保留原有 PBKDF2 密码哈希及教程进度，增加 `test` 管理员和只读访客，不复制旧会话。已有本地账号不删除。迁移后用户重新登录，所有密码、权限和会话由集中库校验；修改密码使本地版与云端版的旧会话一起失效。
+迁移只向空账号库写入；保留原有 PBKDF2 密码哈希及教程进度，增加 `test` 管理员和只读访客，不复制旧会话。已有本地账号不删除。迁移后用户重新登录，所有密码、权限和会话由集中库校验；修改密码使所有部署的旧会话一起失效。
 
-管理员的登录名为“线上测试员”，固定 ID 为 `test`；云端支持使用该 ID 登录。本地如果已存在登录名 `test` 的其他账号，将完整保留其密码、角色和内部编号，本地输入 `test` 仍登录原账号；新增管理员在本地使用“线上测试员”登录。两种账号不会合并或相互覆盖。
+管理员的登录名为“线上测试员”，固定 ID 为 `test`。所有部署均按用户名登录；已有用户名 `test` 的只读账号完整保留，不会因为同名 ID 被升级或覆盖。
 
 本地启动前设置：
 
@@ -66,7 +66,7 @@ docker compose --env-file deploy/cloud.env -f compose.cloud.yaml up -d --build
 docker compose --env-file deploy/cloud.env -f compose.cloud.yaml ps
 ```
 
-集中账号配置在 Compose 中作为机密挂载；未配置时使用独立云端 SQLite 账号库。云端首次初始化需使用空数据库，不会覆盖已有本地账号。`test` 的显示名为“线上测试员”；初始密码从机密文件读取，重启不重置密码。共享访客只能读取，不能提升角色或修改共享密码。
+集中账号配置在 Compose 中作为机密挂载；缺少 D1 配置时拒绝启动，禁止使用独立 SQLite 账号库替代。共享访客只能读取，不能提升角色或修改共享密码。
 
 ## 更新、备份与回退
 
@@ -74,4 +74,4 @@ docker compose --env-file deploy/cloud.env -f compose.cloud.yaml ps
 
 D1 身份数据使用 Cloudflare 的备份/恢复机制管理；本地业务备份不包含集中账号恢复。加密主密钥必须单独备份，丢失后不能解密已保存 AI 密钥。禁止把主密钥备份到公开仓库。
 
-服务器尚未提供时，只能完成部署包、隔离环境测试及容器 CI；不能宣称完整业务已经上线。原 GitHub Pages 继续作为静态展示入口。
+服务器尚未提供时，只能完成部署包、隔离环境测试及容器 CI；不能宣称完整业务已经上线。GitHub Pages 发布相同的完整前端，但其自身不能执行 API；完整业务必须从已部署 Python 服务的地址访问。

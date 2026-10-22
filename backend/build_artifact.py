@@ -7,7 +7,7 @@ def validate_build(directory):
     manifest=json.loads((root/'factorypulse-build.json').read_text('utf-8'))
     if not isinstance(manifest,dict): raise ValueError('界面构建清单必须为对象，请重新构建')
     if manifest.get('schema_version')!=1 or manifest.get('app')!='FactoryPulse': raise ValueError('界面构建清单无效，请重新构建')
-    if manifest.get('build_mode')!='local_service' or manifest.get('asset_base')!='/' or manifest.get('api_prefix')!='/api': raise ValueError('当前不是本地服务版界面，不能用于本地交付')
+    if manifest.get('build_mode') not in {'local_service','full_service'} or manifest.get('asset_base')!='/' or manifest.get('api_prefix')!='/api': raise ValueError('当前不是本地服务版或统一完整界面，不能用于完整服务交付')
     files=manifest.get('files',[])
     if not isinstance(files,list) or any(not isinstance(entry,dict) for entry in files): raise ValueError('构建文件清单格式无效，请重新构建')
     if not files or 'index.html' not in {entry.get('path') for entry in files}: raise ValueError('构建清单缺少首页')

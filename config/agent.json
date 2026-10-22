@@ -1,7 +1,11 @@
 {
-  "max_rounds": 4,
+  "max_rounds": 8,
   "max_calls_per_round": 5,
-  "max_tokens": 1200,
-  "total_timeout_seconds": 60,
-  "disabled_tools": []
+  "max_tokens": 4096,
+  "disabled_tools": [],
+  "tool_timeout_seconds": 15,
+  "read_retries": 1,
+  "max_input_tokens": 96000,
+  "initial_timeout_seconds": 30,
+  "progress_extension_seconds": 10
 }

@@ -1,6 +1,6 @@
 """Server-owned tool contracts. Models may select tools, never handlers or SQL."""
 from typing import Annotated, Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Text = Annotated[str, Field(min_length=1, max_length=100, pattern=r".*\S.*")]
 Note = Annotated[str, Field(min_length=1, max_length=500, pattern=r".*\S.*")]
@@ -10,33 +10,38 @@ class Arguments(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
 
 class Equipment(Arguments):
-    equipment_id: Text = Field(default=None)
+    equipment_id: Text | None = None
+
+    @field_validator("equipment_id", mode="before")
+    @classmethod
+    def empty_means_overview(cls,value):
+        return None if value == "" else value
 
 class History(Arguments):
     equipment_id: Text
 
 class Schedule(Arguments):
     scenario_id: Text
-    start_at: Text = Field(default=None)
+    start_at: Text | None = None
 
 class Constraints(Arguments):
     scenario_id: Text
     note: Note
-    budget: Money = Field(default=None)
-    staff_count: Annotated[int, Field(ge=1, le=1000)] = Field(default=None)
-    max_downtime_h: Annotated[float, Field(gt=0)] = Field(default=None)
+    budget: Money | None = None
+    staff_count: Annotated[int, Field(ge=1, le=1000)] | None = None
+    max_downtime_h: Annotated[float, Field(gt=0)] | None = None
 
 class Compare(Arguments):
-    scenario_id: Text = Field(default=None)
-    budget: Money = Field(default=None)
-    max_downtime_h: Money = Field(default=None)
+    scenario_id: Text | None = None
+    budget: Money | None = None
+    max_downtime_h: Money | None = None
 
 class Draft(History):
     note: Note
 
 class Context(Arguments):
     category: Literal["staff", "orders", "inventory", "scenarios", "requirements", "work_orders"]
-    equipment_id: Text = Field(default=None)
+    equipment_id: Text | None = None
     offset: Annotated[int, Field(ge=0)] = 0
     limit: Annotated[int, Field(ge=1, le=50)] = 20
 
@@ -48,6 +53,20 @@ class Change(Arguments):
     identifier: Text
     values: dict
     reason: Note
+
+    @classmethod
+    def model_json_schema(cls, **kwargs):
+        from .resources import StaffInput, OrderInput, ScenarioInput
+        schema = super().model_json_schema(**kwargs)
+        equipment = {"type":"object", "additionalProperties":False,
+                     "required":["equipment_name","equipment_type"],
+                     "properties":{k:{"type":"string","minLength":1,"maxLength":100} for k in ("equipment_name","equipment_type")}}
+        shapes = {"equipment":equipment, **{kind:model.model_json_schema() for kind,model in
+                  (("staff",StaffInput),("orders",OrderInput),("scenarios",ScenarioInput))}}
+        for shape in shapes.values(): shape["additionalProperties"] = False
+        schema["allOf"] = [{"if":{"properties":{"kind":{"const":kind}}},
+                            "then":{"properties":{"values":shape}}} for kind,shape in shapes.items()]
+        return schema
 
 # name: (argument model, description, creates a draft)
 REGISTRY = {
@@ -68,7 +87,7 @@ def validate_arguments(name, arguments):
         raise ValueError("未注册的工具")
     if not isinstance(arguments, dict):
         raise ValueError("工具参数必须是字段对象")
-    return REGISTRY[name][0].model_validate(arguments).model_dump(exclude_unset=True)
+    return REGISTRY[name][0].model_validate(arguments).model_dump(exclude_unset=True,exclude_none=True)
 
 def tool_definitions(read_only=False, disabled=()):
     return [{"type": "function", "function": {"name": name, "description": description,

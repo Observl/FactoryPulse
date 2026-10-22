@@ -1,4 +1,4 @@
-name: Publish FactoryPulse Web Demo
+name: Publish FactoryPulse
 on:
   push:
     branches: [main]
@@ -27,7 +27,7 @@ jobs:
       - name: TypeScript and Vite build
         run: npm run build > build.log 2>&1 || { cat build.log; exit 1; }
         env:
-          VITE_STATIC_DEMO: 'true'
+          VITE_ASSET_BASE: '/FactoryPulse/'
           VITE_BUILD_COMMIT: ${{ github.sha }}
       - name: Post compiler diagnostics to development issue
         if: failure()

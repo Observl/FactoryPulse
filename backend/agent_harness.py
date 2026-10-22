@@ -1,5 +1,4 @@
 """Authenticated harness API. The model can request changes, never approve them."""
-import asyncio
 import json
 import time
 import uuid
@@ -8,7 +7,7 @@ from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from . import security
 from .agent_store import AgentStore, encode
-from .agent_registry import REGISTRY, tool_definitions, validate_arguments
+from .agent_registry import REGISTRY, tool_definitions
 from .resources import StaffInput, OrderInput, ScenarioInput
 
 
@@ -53,7 +52,7 @@ MODELS = {"equipment": EquipmentInput, "staff": StaffInput, "orders": OrderInput
 KEYS = {"equipment": "equipment_id", "staff": "staff_id", "orders": "order_id", "scenarios": "scenario_id"}
 
 
-def install_harness(app, connect, lock, dispatch, chat, chat_input):
+def install_harness(app, connect, lock, dispatch):
     store = AgentStore(connect)
     active = set()
 
@@ -97,8 +96,9 @@ def install_harness(app, connect, lock, dispatch, chat, chat_input):
         actor()
         from .agent_config import load_config
         config = load_config()
-        return {"tools": tool_definitions(False, config.disabled_tools), "config": config.model_dump(),
-                "schemas": {m.__name__: m.model_json_schema() for m in (SessionInput, TurnInput, ChangeInput, DecisionInput, MemoryInput)},
+        read_only = security.principal()["role"] not in {"admin", "manager"}
+        return {"tools": tool_definitions(read_only, config.disabled_tools), "config": config.model_dump(),
+                "schemas": {m.__name__: m.model_json_schema() for m in (SessionInput, TurnInput, ChangeInput, DecisionInput, MemoryInput, EquipmentInput, StaffInput, OrderInput, ScenarioInput)},
                 "skills": ["risk-review", "maintenance-planning", "change-control"],
                 "multi_agent": "single_orchestrator; specialist skills share one permission gate"}
 
@@ -136,6 +136,8 @@ def install_harness(app, connect, lock, dispatch, chat, chat_input):
             if p["status"] != "pending": return p
             if p["expires_at"] < time.time(): raise HTTPException(409, "授权已过期，请重新申请")
             if payload.decision == "approve":
+                from .agent_config import load_config
+                if "request_change" in load_config().disabled_tools: raise HTTPException(403, "管理员已禁用变更工具")
                 if revision(c) != p["revision"]: raise HTTPException(409, "数据已变化，请重新查询并申请授权")
                 index, before = record(c, p["kind"], p["identifier"])
                 if before != p["before"]: raise HTTPException(409, "目标已变化，请重新申请")
@@ -181,7 +183,15 @@ def install_harness(app, connect, lock, dispatch, chat, chat_input):
             from .main import settings_get, _api_key, address_validation, require_public_https
             base, model = settings_get("ai_base_url"), settings_get("ai_model")
             if not base or not model or not _api_key:
-                result = {"answer": "请先在系统管理连接 AI 服务；当前会话已保存。", "completion_status": "incomplete", "trace": [], "proposals": []}
+                from .agent_fast import quick_tool, evidence_answer
+                name = quick_tool(payload.question)
+                if name and name in session["tools"] and name not in load_config().disabled_tools and not REGISTRY[name][2]:
+                    import asyncio
+                    evidence = await asyncio.wait_for(asyncio.to_thread(dispatch, name, {}), timeout=load_config().tool_timeout_seconds)
+                    result = {**evidence_answer(name,evidence), "completion_status": "complete", "mode": "local_fallback"}
+                    result["answer"] = "当前未连接 AI 模型，以下仅为本地查询结果。\n\n" + result["answer"]
+                else:
+                    result = {"answer": "当前未连接 AI 模型，无法完成此问题的多步骤分析。请先在系统设置保存密钥并测试连接；当前会话已保存。", "completion_status": "incomplete", "mode": "unavailable", "trace": [], "proposals": []}
             else:
                 await address_validation.check(base, require_public_https)
                 def controlled(name, arguments):
@@ -192,11 +202,19 @@ def install_harness(app, connect, lock, dispatch, chat, chat_input):
                     return dispatch(name, arguments)
                 with connect() as c:
                     memory = [json.loads(r[0])["text"] for r in c.execute("SELECT content FROM agent_memory WHERE owner=? ORDER BY rowid DESC LIMIT 10", (owner,))]
-                context = encode({"task": session["task"], "success_criteria": session["success_criteria"], "summary": session["summary"], "turns": session["turns"], "preferences_untrusted": memory})
+                from pathlib import Path
+                skill_root = Path(__file__).resolve().parent.parent / "skills"
+                skills = {name: (skill_root / name / "SKILL.md").read_text(encoding="utf-8") for name in ("risk-review", "maintenance-planning", "change-control")}
+                context = encode({"task": session["task"], "success_criteria": session["success_criteria"], "summary": session["summary"], "turns": session["turns"], "preferences_untrusted": memory, "workflow_guidance": skills,
+                                  "change_field_schemas": {name: cls.model_json_schema() for name, cls in MODELS.items()}})
                 result = await run_agent(base, model, _api_key, payload.question, controlled,
                     read_only=security.principal()["role"] not in {"admin", "manager"}, should_stop=request.is_disconnected,
-                    enabled_tools=session["tools"], session_context=context)
+                    enabled_tools=session["tools"], session_context=context,
+                    on_progress=lambda budget, trace:store.run(sid,{"status":"running","owner":owner,"budget":budget,"trace":trace},rid))
             result.update(run_id=rid, session_id=sid, permissions=permissions)
+            if permissions:
+                result["completion_status"] = "waiting_permission"
+                result["answer"] = "已准备具体变更，等待您逐项核对并授权。尚未修改业务数据；请查看权限请求中的变更前后值。"
             store.save_turn(sid, owner, payload.question, result)
             store.run(sid, {"status": result.get("completion_status", "incomplete"), "result": result, "finished_at": time.time()}, rid)
             return result

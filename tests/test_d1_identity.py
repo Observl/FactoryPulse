@@ -74,3 +74,24 @@ def test_d1_http_errors_never_echo_sql_or_hashes(tmp_path,monkeypatch):
     monkeypatch.setattr(httpx,'post',lambda *a,**k:httpx.Response(403,json={'success':False,'errors':[{'message':'private-sql-and-hashes'}]}))
     with pytest.raises(HTTPException) as error:store.snapshot()
     assert error.value.status_code==503 and 'private-sql-and-hashes' not in error.value.detail
+
+
+def test_normal_service_requires_d1_and_never_falls_back(tmp_path,monkeypatch):
+    import backend.d1_identity as identity
+    monkeypatch.setattr(identity,'ROOT',tmp_path)
+    monkeypatch.delenv('FACTORYPULSE_IDENTITY_CONFIG',raising=False)
+    monkeypatch.delenv('FACTORYPULSE_TEST_ALLOW_ANONYMOUS',raising=False)
+    with pytest.raises(RuntimeError,match='Cloudflare D1'):identity.configuration()
+
+
+def test_default_private_identity_config_is_shared_in_every_environment(tmp_path,monkeypatch):
+    import json
+    import backend.d1_identity as identity
+    monkeypatch.setattr(identity,'ROOT',tmp_path)
+    monkeypatch.delenv('FACTORYPULSE_IDENTITY_CONFIG',raising=False)
+    monkeypatch.delenv('FACTORYPULSE_TEST_ALLOW_ANONYMOUS',raising=False)
+    secret=tmp_path/'.secrets';secret.mkdir()
+    (secret/'identity.json').write_text(json.dumps({'account_id':'a'*32,'database_id':'a'*36,'token_file':'token'}))
+    for deployment in ('local','cloud',''):
+        monkeypatch.setenv('FACTORYPULSE_DEPLOYMENT',deployment)
+        assert identity.configuration()['token_file']==str(secret/'token')

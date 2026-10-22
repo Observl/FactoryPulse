@@ -61,15 +61,11 @@ async def validation_error(request,exception):
     return JSONResponse({"detail":errors},status_code=422)
 def credential_get():
     if os.environ.get("FACTORYPULSE_AI_API_KEY"): return os.environ["FACTORYPULSE_AI_API_KEY"]
-    try:
-        import keyring
-        return keyring.get_password("FactoryPulse","ai-api-key") or ""
-    except Exception: return ""
+    from .credentials import load_secret
+    return load_secret(DATA_DIR)
 def credential_set(value:str)->bool:
-    try:
-        import keyring
-        keyring.set_password("FactoryPulse","ai-api-key",value); return True
-    except Exception: return False
+    from .credentials import save_secret
+    return save_secret(DATA_DIR,value)
 _api_key = credential_get()
 _credential_secure = bool(_api_key and not os.environ.get("FACTORYPULSE_AI_API_KEY"))
 _analytics_cache: dict = {"key": None, "devices": {}, "summary": {}}
@@ -1258,7 +1254,9 @@ class ApiSettings(BaseModel):
     base_url:Optional[str]=None
 @app.get("/api/developer/settings")
 def read_api_settings():
-    return {"model":settings_get("ai_model",""),"models":[{"id":model,**details} for model,details in MODEL_CATALOG.items()],"has_api_key":bool(_api_key),"key_storage":"系统凭据存储" if _credential_secure else ("环境变量" if os.environ.get("FACTORYPULSE_AI_API_KEY") else "未配置")}
+    from .credentials import encrypted_path
+    storage = ("Windows用户级加密文件" if encrypted_path(DATA_DIR).exists() else "系统凭据存储") if _credential_secure else ("环境变量" if os.environ.get("FACTORYPULSE_AI_API_KEY") else "未配置")
+    return {"model":settings_get("ai_model",""),"models":[{"id":model,**details} for model,details in MODEL_CATALOG.items()],"has_api_key":bool(_api_key),"key_storage":storage}
 @app.post("/api/developer/settings")
 def save_api_settings(cfg:ApiSettings):
     global _api_key,_credential_secure
@@ -1272,7 +1270,7 @@ def save_api_settings(cfg:ApiSettings):
         raise HTTPException(422,"请选择受支持的模型")
     if cfg.api_key is not None and cfg.api_key.strip():
         candidate=cfg.api_key.strip()
-        if not credential_set(candidate): raise HTTPException(503,"系统凭据存储不可用，未保存密钥；请修复系统凭据服务，或由部署管理员配置环境变量")
+        if not credential_set(candidate): raise HTTPException(503,"系统凭据和用户级加密存储均不可用，密钥未保存；请检查当前Windows用户权限或配置环境变量")
         _api_key=candidate; _credential_secure=True
     with _lock,connect() as c:
         for k,v in (("ai_provider",provider),("ai_base_url",base_url),("ai_model",cfg.model)):
@@ -1454,7 +1452,16 @@ def copilot_calculation_context(question:str)->dict:
 
 def agent_dispatch(name: str, arguments: dict) -> dict:
     with _lock:
-        return _agent_dispatch_consistent(name,arguments)
+        result = _agent_dispatch_consistent(name,arguments)
+        if result.get("proposal"):
+            proposal = result["proposal"]
+            proposal["owner_user_id"] = (security.principal() or {}).get("user_id")
+            with connect() as c:
+                saved = c.execute("SELECT value FROM settings WHERE key=?",("agent_proposal:"+proposal["proposal_id"],)).fetchone()
+                if saved:
+                    content = json.loads(saved[0]); content["owner_user_id"] = proposal["owner_user_id"]
+                    c.execute("UPDATE settings SET value=? WHERE key=?",(json.dumps(content,ensure_ascii=False),"agent_proposal:"+proposal["proposal_id"]))
+        return result
 
 
 def _agent_dispatch_consistent(name: str, arguments: dict) -> dict:
@@ -1519,6 +1526,8 @@ def confirm_agent_proposal(proposal_id: str, payload: ProposalConfirmation):
         with connect() as c:
             saved=c.execute("SELECT value FROM settings WHERE key=?",("agent_proposal:"+proposal_id,)).fetchone()
         candidate=json.loads(saved[0]) if saved else {}
+        if security.principal() and candidate.get("owner_user_id")!=security.principal()["user_id"]:
+            raise HTTPException(403,"只能确认本人创建的助手草稿")
         if candidate.get("kind")=="schedule":
             request=ScheduleRequest(scenario_id=candidate.get("scenario_id"),start_at=candidate.get("start_at"),request_id="agent-schedule-"+proposal_id)
             with connect() as c:
@@ -1607,6 +1616,9 @@ security.install_auth(app,connect,_lock)
 
 backups.install_backups(app,DB,connect)
 
+from .agent_harness import install_harness
+agent_store = install_harness(app, connect, _lock, agent_dispatch)
+
 # Opt-in local delivery: serve the built UI and API from one loopback origin.
 if os.getenv("FACTORYPULSE_SERVE_UI") == "1":
     from fastapi.staticfiles import StaticFiles
@@ -1614,7 +1626,3 @@ if os.getenv("FACTORYPULSE_SERVE_UI") == "1":
     if not (ui_directory / "index.html").is_file():
         raise RuntimeError("找不到已构建的前端文件，请先完成前端构建或设置 FACTORYPULSE_UI_DIR")
     app.mount("/", StaticFiles(directory=ui_directory, html=True), name="factorypulse-ui")
-
-
-from .agent_harness import install_harness
-agent_store = install_harness(app, connect, _lock, agent_dispatch, copilot_chat, ChatInput)

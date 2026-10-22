@@ -10,7 +10,6 @@ origins=os.environ.get('FACTORYPULSE_ALLOWED_ORIGINS','').split(',')
 if not origins or any(urlparse(v).scheme not in {'http','https'} or not urlparse(v).netloc or urlparse(v).path not in {'','/'} for v in origins):
     raise RuntimeError('必须设置完整的云端访问来源，不能包含路径或通配符')
 os.environ['FACTORYPULSE_AUTH_REQUIRED']='1'
-os.environ.pop('FACTORYPULSE_TEST_ALLOW_ANONYMOUS',None)
 os.environ['FACTORYPULSE_SERVE_UI']='1'
 ui=Path(os.environ.get('FACTORYPULSE_UI_DIR',Path(__file__).resolve().parents[1]/'dist'))
 from .build_artifact import validate_build
@@ -23,7 +22,8 @@ from .d1_identity import configuration,D1Store
 if configuration():
     _,identities=D1Store(configuration()).snapshot()
     if not identities['auth_users']:raise RuntimeError('D1账号中心尚未初始化')
-else:initialize_accounts(main.connect,main._lock,password)
+elif os.environ.get('FACTORYPULSE_TEST_ALLOW_ANONYMOUS')=='1':initialize_accounts(main.connect,main._lock,password)
+else:raise RuntimeError('必须配置 Cloudflare D1 账号中心')
 password=None
 main.credential_get=lambda:os.environ.get('FACTORYPULSE_AI_API_KEY') or load_secret(main.DATA_DIR)
 main.credential_set=lambda value:save_secret(main.DATA_DIR,value)

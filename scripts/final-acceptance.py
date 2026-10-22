@@ -8,6 +8,8 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 runtime=tempfile.TemporaryDirectory(prefix='factorypulse-final-')
 os.environ['FACTORYPULSE_DATA_DIR']=runtime.name
 os.environ['FACTORYPULSE_AUTH_REQUIRED']='0'
+os.environ['FACTORYPULSE_TEST_ALLOW_ANONYMOUS']='1'
+os.environ.pop('FACTORYPULSE_IDENTITY_CONFIG',None)
 os.environ.pop('FACTORYPULSE_ENABLE_LEGACY_FIXTURES',None)
 from fastapi.testclient import TestClient
 from backend import main

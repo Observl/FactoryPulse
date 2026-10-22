@@ -8,6 +8,8 @@ const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarge
 const {apiRequest,responseError}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
 globalThis.window={setTimeout,clearTimeout};
 let calls=0;
+assert.match(responseError({detail:"Not Found"},404),/后端已更新并重启/);
+assert.match(responseError({detail:"Method Not Allowed"},405),/更新并重启后端/);
 
 assert.equal(responseError({detail:[{loc:['body','available_hours'],type:'greater_than',ctx:{gt:0}}]},422),'可用工时：必须大于 0');
 assert.equal(responseError({detail:[{loc:['body','shift_end'],type:'value_error',msg:'Value error, 班次结束必须晚于开始'}]},422),'班次结束：班次结束必须晚于开始');
@@ -24,4 +26,4 @@ globalThis.fetch=async(_url,options)=>new Promise((_resolve,reject)=>options.sig
 await assert.rejects(apiRequest('/overview',{},1),/读取超时/);
 globalThis.fetch=async()=>({ok:false,status:409,json:async()=>({detail:'记录版本已改变，请刷新'})});
 await assert.rejects(apiRequest('/work-orders/example/approval',{method:'POST'}),/记录版本已改变/);
-console.log('6 API failure-handling checks passed (mocked transport; no browser/network).');
+console.log('8 API failure-handling checks passed (mocked transport; no browser/network).');

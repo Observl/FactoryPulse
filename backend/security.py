@@ -173,7 +173,7 @@ def install_auth(app,connect,lock):
                 if not user: return JSONResponse({"detail":"请先登录后再操作"},status_code=401)
                 path=request.url.path
                 if path.startswith(("/api/developer/","/api/auth/users")) and user["role"]!="admin": return JSONResponse({"detail":"此功能需要管理员权限"},status_code=403)
-                if request.method not in {"GET","HEAD"} and not path.startswith(("/api/auth/","/api/copilot/chat")):
+                if request.method not in {"GET","HEAD"} and not path.startswith(("/api/auth/","/api/copilot/chat","/api/copilot/sessions")):
                     transition=path.startswith("/api/work-orders/") and path.endswith("/transition")
                     allowed_roles={"admin","manager","technician"} if transition else {"admin","manager"}
                     if user["role"] not in allowed_roles: return JSONResponse({"detail":"当前账号仅可查看，不能修改或审批维护任务"},status_code=403)
@@ -190,11 +190,11 @@ def install_auth(app,connect,lock):
             with connect() as c:
                 row=c.execute("SELECT step,completed_at FROM auth_onboarding WHERE user_id=?",(user["user_id"],)).fetchone()
             onboarding={"step":row["step"] if row else 0,"completed_at":row["completed_at"] if row else None,"total_steps":ONBOARDING_STEPS}
-        return {"required":required(),"setup_needed":not exists,"mode":"accounts" if required() else "local_single_operator","deployment":"cloud" if cloud_enabled() else "local","identity_provider":"cloudflare_d1" if identity_configuration() else "sqlite","user":user,"onboarding":onboarding}
+        return {"required":required(),"setup_needed":not exists,"mode":"accounts" if required() else "local_single_operator","guest_available":bool(identity_configuration()) or cloud_enabled(),"identity_provider":"cloudflare_d1" if identity_configuration() else "sqlite","user":user,"onboarding":onboarding}
 
     @app.post('/api/auth/guest')
     def guest_login(request:Request):
-        if not cloud_enabled():raise HTTPException(404,'本地服务不提供免密访客入口')
+        if not identity_configuration() and not cloud_enabled():raise HTTPException(404,'未配置集中访客账号')
         with connect() as c:
             row=c.execute("SELECT * FROM auth_users WHERE user_id=? AND role='viewer' AND active=1",(GUEST_ID,)).fetchone()
         if not row:raise HTTPException(503,'访客账号尚未配置')
@@ -244,9 +244,6 @@ def install_auth(app,connect,lock):
             if recent and previous["attempts"]>=5: raise HTTPException(429,"尝试次数过多，请10分钟后重试")
             c.execute("INSERT OR REPLACE INTO auth_attempts VALUES (?,?,?)",(attempt,previous["attempts"]+1 if recent else 1,previous["window_start"] if recent else now.isoformat()))
             row=c.execute("SELECT * FROM auth_users WHERE username=?",(name,)).fetchone()
-            if cloud_enabled():
-                cloud_admin=c.execute("SELECT * FROM auth_users WHERE user_id='test' AND (user_id=? OR lower(display_name)=? OR username=?)",(name,name,name)).fetchone()
-                if cloud_admin:row=cloud_admin
         valid=verify_password(payload.password,row["password_hash"] if row else dummy)
         if not row or not row["active"] or not valid: raise HTTPException(401,"账号或密码不正确")
         with lock,connect() as c: c.execute("DELETE FROM auth_attempts WHERE attempt_key=?",(attempt,))

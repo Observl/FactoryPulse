@@ -19,6 +19,10 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def configuration():
     file=os.environ.get('FACTORYPULSE_IDENTITY_CONFIG')
+    if not file and os.environ.get('FACTORYPULSE_TEST_ALLOW_ANONYMOUS')!='1':
+        default=ROOT/'.secrets/identity.json'
+        if default.is_file():file=str(default)
+        else:raise RuntimeError('必须配置 Cloudflare D1 账号中心；不会使用本地账号数据库')
     if not file:return None
     try:
         value=json.loads(Path(file).read_text(encoding='utf-8'))

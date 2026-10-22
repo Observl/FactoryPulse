@@ -5,18 +5,21 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .agent_registry import REGISTRY
 
 class AgentConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    max_rounds: int = Field(default=4, ge=1, le=8)
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    max_rounds: int = Field(default=8, ge=1, le=16)
     max_calls_per_round: int = Field(default=5, ge=1, le=8)
-    max_tokens: int = Field(default=1200, ge=256, le=2400)
-    total_timeout_seconds: int = Field(default=60, ge=5, le=90)
+    max_tokens: int = Field(default=4096, ge=256, le=8192)
+    initial_timeout_seconds: int = Field(default=30, ge=1, le=300)
+    progress_extension_seconds: int = Field(default=10, ge=1, le=60)
+    # Accepted only for migration from older config files; never used for budgeting.
+    total_timeout_seconds: int | None = Field(default=None, ge=5, le=300, exclude=True)
     disabled_tools: list[str] = Field(default_factory=list)
     tool_timeout_seconds: int = Field(default=15, ge=1, le=60)
     read_retries: int = Field(default=1, ge=0, le=2)
-    max_input_tokens: int = Field(default=32000, ge=2000, le=64000)
-    max_run_cost_usd: float = Field(default=0.50, gt=0, le=100)
-    input_usd_per_million: float = Field(default=10, ge=0, le=1000)
-    output_usd_per_million: float = Field(default=30, ge=0, le=1000)
+    max_input_tokens: int = Field(default=96000, ge=2000, le=256000)
+    max_run_cost_usd: float | None = Field(default=None, gt=0, le=100, exclude=True)
+    input_usd_per_million: float | None = Field(default=None, ge=0, le=1000, exclude=True)
+    output_usd_per_million: float | None = Field(default=None, ge=0, le=1000, exclude=True)
 
     @field_validator("disabled_tools")
     @classmethod

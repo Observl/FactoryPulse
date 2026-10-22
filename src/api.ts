@@ -20,6 +20,8 @@ function issueMessage(issue:ValidationIssue):string{
 
 export function responseError(body:unknown,status:number):string{
  const detail=body&&typeof body==="object"&&"detail" in body?(body as {detail:unknown}).detail:undefined;
+ if(status===404&&detail==="Not Found")return "请求的服务接口不存在，请确认后端已更新并重启。";
+ if(status===405)return "当前后端不支持此操作，请更新并重启后端服务后重试。";
  if(typeof detail==="string")return detail;
  if(Array.isArray(detail))return detail.slice(0,3).map(item=>issueMessage(item as ValidationIssue)).join("；")+(detail.length>3?`；另有 ${detail.length-3} 项需要修改`:"");
  if(status===409)return "记录已被更新，请刷新后核对，再重新操作。";
