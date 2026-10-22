@@ -4,6 +4,11 @@ import tempfile
 from pathlib import Path
 import pytest
 
+# Developer shells may inherit the real identity configuration from start-local.ps1.
+# Unit/regression tests must never authenticate against or mutate the operator's D1.
+os.environ.pop("FACTORYPULSE_IDENTITY_CONFIG",None)
+os.environ.pop("FACTORYPULSE_DEPLOYMENT",None)
+
 _test_runtime=tempfile.TemporaryDirectory(prefix="factorypulse-tests-",dir=Path(__file__).resolve().parent)
 os.environ["FACTORYPULSE_AUTH_REQUIRED"]="0"
 os.environ["FACTORYPULSE_TEST_ALLOW_ANONYMOUS"]="1"
