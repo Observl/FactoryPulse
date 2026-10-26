@@ -13,8 +13,10 @@ def upgrade():
     normalized=[]
     for row in data['auth_users']:
         identifier=int(row['user_id']);role=ROLE_CODES.get(row['role'],row['role']);staff=int(row['staff_id'])
-        if identifier<10001 or role not in ROLE_LABELS:raise RuntimeError('账号编号或角色不符合新规则，未修改数据库')
-        if not ((role=='developer' and staff==0) or (role=='admin' and staff==-1) or (role in {'user','viewer'} and staff>0)):raise RuntimeError('人员编号与角色不匹配，未修改数据库')
+        if str(staff)!=str(row['staff_id']):raise RuntimeError('人员编号必须为整数')
+        if role=='viewer':staff=-1
+        if identifier<10000 or role not in ROLE_LABELS:raise RuntimeError('账号编号或角色不符合新规则，未修改数据库')
+        if not ((role=='developer' and staff==0) or (role in {'admin','viewer'} and staff==-1) or (role=='user' and staff>0)):raise RuntimeError('人员编号与角色不匹配，未修改数据库')
         if row['active'] not in (0,1):raise RuntimeError('启用状态必须为0或1')
         if not (re.fullmatch('[a-fA-F0-9]{64}',row['password_hash']) or row['password_hash'].startswith('pbkdf2_sha256$')):raise RuntimeError('密码格式无效，未修改数据库')
         normalized.append([identifier,row['display_name'],ROLE_LABELS[role],staff,row['password_hash'],row['active'],row['version']])

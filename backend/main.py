@@ -23,6 +23,7 @@ from .import_pipeline import install_import_pipeline
 from .resources import install_resource_routes,ScenarioInput
 from . import inventory,security,backups,migrations
 from .replay import event_timeline
+from .reading_reference import ranges as reading_reference_ranges
 from .analytics import combine_risks, cp_sat_select, ewma_scores, schedule_selected, xgboost_with_shap
 from .score_explanation import rule_details
 from .adaptive_training import load_training_config
@@ -41,6 +42,15 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 IMPORT_SESSION_DIR = DATA_DIR / "import_sessions"
 IMPORT_SESSION_DIR.mkdir(parents=True, exist_ok=True)
 DB = DATA_DIR / "factorypulse.sqlite3"
+REMOTE_DATABASE = os.environ.get("FACTORYPULSE_TEST_ALLOW_ANONYMOUS") != "1"
+if REMOTE_DATABASE:
+    def _forbid_local_database(*args,**kwargs):
+        raise RuntimeError('生产运行仅允许 Cloudflare D1，禁止创建或打开本地 SQLite 数据库')
+    sqlite3.connect = _forbid_local_database
+    from .d1_business import connection_factory
+    _remote_connect = connection_factory()
+    from .d1_business import configuration as business_database_configuration
+    DB = "cloudflare-d1://" + business_database_configuration()['database_id']
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BACKBLAZE_DATA_FILE = Path(os.getenv("FACTORYPULSE_BACKBLAZE_FILE", PROJECT_ROOT / "data" / "backblaze" / "2013-04-10.csv"))
 BACKBLAZE_SOURCE_URL = "https://f001.backblazeb2.com/file/Backblaze-Hard-Drive-Data/data_2013.zip"
@@ -89,16 +99,22 @@ class ManagedConnection(sqlite3.Connection):
 
 
 def connect():
+    if REMOTE_DATABASE:return _remote_connect()
     c=sqlite3.connect(DB,timeout=15,factory=ManagedConnection)
     c.row_factory=sqlite3.Row
     c.execute("PRAGMA foreign_keys=ON")
     return c
 def init():
     with connect() as c:
-        c.execute("BEGIN IMMEDIATE")
         previous_schema=migrations.check_compatible(c)
+        if REMOTE_DATABASE and previous_schema==migrations.SCHEMA_VERSION:
+            for table,expected in migrations.REQUIRED_COLUMNS.items():
+                if not expected.issubset({row[1] for row in c.execute(f'PRAGMA table_info({table})')}):
+                    raise RuntimeError(f'数据库结构不完整：{table}')
+            return
+        c.execute("BEGIN IMMEDIATE")
         inventory.create_schema(c)
-        security.create_schema(c)
+        if not REMOTE_DATABASE:security.create_schema(c)
         c.execute("CREATE TABLE IF NOT EXISTS records (table_name TEXT NOT NULL, row_index INTEGER NOT NULL, content TEXT NOT NULL, PRIMARY KEY(table_name,row_index))")
         c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         c.execute("CREATE TABLE IF NOT EXISTS alerts (alert_id TEXT PRIMARY KEY, equipment_id TEXT NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL)")
@@ -113,12 +129,30 @@ def init():
             if name not in columns: c.execute(f"ALTER TABLE alerts ADD COLUMN {name} {definition}")
         migrations.finalize_schema(c,previous_schema)
 init()
+def source_cache_revision(table):
+    if not REMOTE_DATABASE:return None
+    with connect() as c:
+        try:
+            result=c.execute('SELECT revision FROM fp_resource_revisions WHERE resource=?',('records/'+table,)).fetchone()
+            return result[0] if result else 0
+        except Exception as error:
+            if 'fp_resource_revisions' in str(error):return None
+            raise
+
 def rows(table, limit=None):
     if table=="readings" and limit is None:
-        version=(str(DB),settings_get("last_sync_at"))
+        version=(str(DB),settings_get("last_sync_at"),source_cache_revision('readings'))
         if version[1] and _analytics_cache.get("key") is not None and _readings_cache["key"]==version:
             return _readings_cache["records"]
     with _lock, connect() as c:
+        if REMOTE_DATABASE and table=="readings" and limit is None:
+            count=c.execute("SELECT COUNT(*) FROM records WHERE table_name=?",[table]).fetchone()[0]
+            result=[]
+            for start in range(0,count,2000):
+                batches=c.store.batch([{'sql':'SELECT content FROM records WHERE table_name=? ORDER BY row_index LIMIT 500 OFFSET ?','params':[table,offset]} for offset in range(start,min(start+2000,count),500)])
+                for batch in batches:result.extend(json.loads(row['content']) for row in batch['results'])
+            if version[1]:_readings_cache.update(key=version,records=result)
+            return result
         sql="SELECT content FROM records WHERE table_name=? ORDER BY row_index"
         params=[table]
         if limit is not None:
@@ -184,7 +218,7 @@ def health():
         with connect() as c: c.execute("SELECT 1").fetchone()
     except sqlite3.Error:
         raise HTTPException(503,"数据服务尚未就绪")
-    return {"status":"ok","version":"0.5.0-preview","deployment_status":"validation_required"}
+    return {"status":"ok","version":"0.5.0-preview","deployment_status":"validation_required","database_provider":"cloudflare_d1" if REMOTE_DATABASE else "isolated_test_fixture","local_database":False if REMOTE_DATABASE else True}
 
 
 @app.get("/api/health/ready")
@@ -293,7 +327,14 @@ def sync_cnc_demo():
 def sync_model_validation():
     """An explicit opt-in fixture; previous datasets and work orders are retained."""
     security.require_roles("developer","admin")
-    data,source_date=load_acceptance_dataset()
+    if REMOTE_DATABASE:
+        from .d1_business import load_default_dataset
+        data,source_date=load_default_dataset()
+        # Frozen sensor samples stay unchanged; simulated shifts/windows follow
+        # the same refresh policy as the file-based acceptance loader.
+        from .demo_business import complete_demo_business
+        complete_demo_business(data)
+    else:data,source_date=load_acceptance_dataset()
     validate(data)
     synced_at=datetime.now(timezone.utc).isoformat()
     with _lock,connect() as c:
@@ -479,7 +520,7 @@ def confirm_industrial_import(payload:IntelligentImportConfirm):
     return {"success":True,"filename":source["filename"],"record_count":len(normalized),"device_count":len(equipment),"data_origin":"AI_ASSISTED_USER_IMPORT"}
 def analytics_snapshot(all_readings, risks):
     with _analytics_lock:
-        version=(str(DB),settings_get("last_sync_at"),json.dumps(load_training_config().model_dump(),sort_keys=True))
+        version=(str(DB),settings_get("last_sync_at"),json.dumps(load_training_config().model_dump(),sort_keys=True),source_cache_revision('readings'),source_cache_revision('demo_risks'))
         if version[1] and _analytics_cache.get("source_version")==version and _analytics_cache.get("key") is not None:
             return _analytics_cache
         result=_compute_analytics_snapshot(all_readings,risks)
@@ -488,10 +529,11 @@ def analytics_snapshot(all_readings, risks):
 
 
 def _compute_analytics_snapshot(all_readings, risks):
+    from .data_sync import refresh_rule_baselines
     fingerprint=hashlib.sha256(json.dumps(all_readings,ensure_ascii=False,sort_keys=True,default=str,separators=(",",":")).encode()).hexdigest()
     training_config=load_training_config().model_dump()
     key=(str(DB),fingerprint,settings_get("last_sync_at"),json.dumps(training_config,sort_keys=True))
-    if _analytics_cache["key"]==key: return _analytics_cache
+    if _analytics_cache["key"]==key: return refresh_rule_baselines(_analytics_cache,risks,num)
     algorithm_sha256=hashlib.sha256(b"".join((PROJECT_ROOT/"backend"/name).read_bytes() for name in ("main.py","analytics.py","adaptive_training.py","field_profiles.py"))).hexdigest()
     # Reuse only snapshots matching data, configuration AND current analysis implementation.
     with connect() as c:
@@ -501,7 +543,7 @@ def _compute_analytics_snapshot(all_readings, risks):
         except (ValueError,TypeError): continue
         if evidence.get("input_sha256")==fingerprint and evidence.get("training_config")==training_config and evidence.get("algorithm_sha256")==algorithm_sha256:
             _analytics_cache.update(key=key,devices=evidence["devices"],summary=evidence["summary"])
-            return _analytics_cache
+            return refresh_rule_baselines(_analytics_cache,risks,num)
     if settings_get("data_origin")=="UCI_METROPT3_REAL_OPERATIONAL": label_observed_history(all_readings)
     ewma=ewma_scores(all_readings)
     model=xgboost_with_shap(all_readings)
@@ -654,7 +696,7 @@ def equipment_history(equipment_id:str,points:int=360):
     maintenance.extend(record for record in events if record["maintenance_id"] not in known)
     maintenance.sort(key=lambda row:str(row.get("maintenance_date","")),reverse=True)
     first_signal=_history_signal(series[0])
-    return {"equipment_id":equipment_id,"total_readings":len(series),"returned_points":len(enriched),"start_at":series[0].get("timestamp"),"end_at":series[-1].get("timestamp"),"signal_label":first_signal[1],"signal_unit":first_signal[2],"risk_basis":"历史工况规则分（仅用当时及此前读数，不是模型预测）","series":enriched,"maintenance":maintenance,"fault_intervals":fault_intervals,"aggregation":"首尾原始时间点与内部窗口最高风险点；故障区间由聚合前的完整标签提取"}
+    return {"equipment_id":equipment_id,"total_readings":len(series),"returned_points":len(enriched),"start_at":series[0].get("timestamp"),"end_at":series[-1].get("timestamp"),"signal_label":first_signal[1],"signal_unit":first_signal[2],"risk_basis":"历史工况规则分（仅用当时及此前读数，不是模型预测）","series":enriched,"maintenance":maintenance,"fault_intervals":fault_intervals,"reference_ranges":reading_reference_ranges(series).get(equipment_id,{}),"aggregation":"首尾原始时间点与内部窗口最高风险点；故障区间由聚合前的完整标签提取"}
 
 class MaintenanceRuleUpdate(BaseModel):
     maintenance_hours:float=Field(ge=0,le=10000)
@@ -898,6 +940,11 @@ def _model_replay_consistent():
 @app.get("/api/data-quality")
 def data_quality():
     with _lock:
+        if REMOTE_DATABASE:
+            with connect() as connection:
+                if getattr(connection,'schema_v2',False):
+                    from .sql_reports import data_quality as sql_data_quality
+                    return sql_data_quality(connection)
         return _data_quality_consistent()
 
 
@@ -1612,9 +1659,29 @@ install_resource_routes(app,connect,rows,_lock)
 from .workflow_board import install_workflow_routes
 install_workflow_routes(app,globals())
 
+from .data_sync import install_data_sync
+install_data_sync(app,connect)
 security.install_auth(app,connect,_lock)
 
-backups.install_backups(app,DB,connect)
+if REMOTE_DATABASE:
+    from .d1_business import request_cache
+    @app.middleware('http')
+    async def d1_request_reads(request,call_next):
+        # A response may reuse its own remote reads, never a persistent local DB.
+        token=request_cache.set({})
+        try:return await call_next(request)
+        finally:request_cache.reset(token)
+
+if not REMOTE_DATABASE:backups.install_backups(app,DB,connect)
+else:
+    @app.get('/api/backups/status')
+    def remote_backup_status():
+        security.require_roles('developer','admin')
+        return {'status':'cloudflare_managed','provider':'cloudflare_d1','local_database':False,'message':'请在 Cloudflare 控制台管理 D1 Time Travel 与导出。'}
+    @app.post('/api/backups/create')
+    def remote_backup_create():
+        security.require_roles('developer','admin')
+        raise HTTPException(409,'已禁用本地数据库备份；请在 Cloudflare 控制台创建 D1 导出。')
 
 from .agent_harness import install_harness
 agent_store = install_harness(app, connect, _lock, agent_dispatch)

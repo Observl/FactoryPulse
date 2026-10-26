@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {dify,readDify,safeDifyError,sessionToken,conversationId} from './dify.mjs';
+const user={user_id:'10001',version:1,role:'developer'};let stored=null;const configs=new Map();
+const stub={async fetch(url,options){const value=JSON.parse(options.body);stored=configs.get(value.user_id)||null;if(url.endsWith('-get'))return Response.json(stored);if(value.version!==(stored?.version||0))return Response.json({detail:'conflict'},{status:409});stored={...value,api_key:value.api_key||stored?.api_key,version:(stored?.version||0)+1};configs.set(value.user_id,stored);return Response.json({success:true,version:stored.version})}};
+const env={IDENTITY_RUNTIME:{idFromName:n=>n,get:()=>stub}};
+const request=(path,body)=>new Request('https://test.invalid/api/copilot/dify/'+path,{method:body?'POST':'GET',...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
+let response=await dify(request('status'),env,user);assert.equal((await response.json()).ready,false);
+response=await dify(request('config'),env,{...user,user_id:'10002',role:'viewer'});assert.equal((await response.json()).ready,false);
+response=await dify(request('config',{api_key:'app-fixture',input_field:'query',output_field:'result',version:0}),env,user);assert.equal(response.status,200);
+response=await dify(request('config'),env,user);const publicValue=await response.json();assert.equal(publicValue.ready,true);assert.ok(!JSON.stringify(publicValue).includes('app-fixture'));
+response=await dify(request('config',{api_key:'app-other',input_field:'query',output_field:'result',version:0}),env,user);assert.equal(response.status,409);
+response=await dify(request('chat',{question:'test',context:'设备台账'}),env,user,async(url,options)=>{assert.equal(url,'https://api.dify.ai/v1/workflows/run');assert.equal(options.redirect,'follow');assert.equal(options.headers.Authorization,'Bearer app-fixture');const payload=JSON.parse(options.body);assert.equal(payload.user,'factorypulse:10001');assert.ok(payload.inputs.query.includes('设备台账'));return new Response('data: '+JSON.stringify({event:'workflow_finished',data:{status:'succeeded',outputs:{result:'已收到问题'}}})+'\n\n',{headers:{'Content-Type':'text/event-stream'}})});assert.equal((await response.json()).answer,'已收到问题');
+response=await dify(request('chat',{question:'test'}),env,user,async()=>new Response('private details',{status:401}));assert.equal(response.status,502);assert.ok(!(await response.text()).includes('private details'));
+response=await dify(request('test',{}),env,{...user,user_id:'10002',role:'viewer'});assert.equal(response.status,503);
+response=await dify(request('test',{}),env,user,async()=>Response.json({user_input_form:[{'text-input':{variable:'query',required:true}}]}));assert.equal((await response.json()).variables[0].name,'query');
+const token=await sessionToken('private','user1','conversation');assert.equal(await conversationId('private','user1',token),'conversation');await assert.rejects(conversationId('private','user2',token));
+await assert.rejects(readDify(new Response('data: {"event":"message","answer":"partial"}\n\n',{headers:{'Content-Type':'text/event-stream'}})));
+console.log('Dify checks passed: account-isolated configuration, no secret disclosure, optimistic updates, Workflow input/output, error sanitization, API test, conversation isolation, interrupted stream');
+
+assert.ok(!safeDifyError('provider token=secret-value app-fixture','app-fixture').includes('secret-value'));
+await assert.rejects(readDify(new Response('data: '+JSON.stringify({event:'error',message:'Required input missing'})+'\n\n',{headers:{'Content-Type':'text/event-stream'}})),/Required input missing/);

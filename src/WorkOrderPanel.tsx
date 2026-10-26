@@ -1,3 +1,4 @@
+import {useApiUpdate} from "./useCachedData";
 import {Button} from "./components/Button";
 import {useExclusiveOperation} from "./useExclusiveOperation";
 import {useUnsavedChanges} from "./useUnsavedChanges";
@@ -22,6 +23,7 @@ export function WorkOrderPanel({id,onClose,onChanged,onAdjust,onOpenDevice,onSch
  const openOperation=useExclusiveOperation(()=>{setMode("");setNote("");unsaved.clear()});
  const actionVersion=useRef<number|null>(null);
  const operationId=useRef(crypto.randomUUID());
+ useApiUpdate([`/work-orders/${encodeURIComponent(id)}/flow`],(_path,body)=>setFlow(body));
  const load=async()=>{setFlow(await apiRequest(`/work-orders/${encodeURIComponent(id)}/flow`))};
  useEffect(()=>{dialog.current?.showModal();let active=true;apiRequest(`/work-orders/${encodeURIComponent(id)}/flow`).then(value=>{if(active)setFlow(value)}).catch(e=>{if(active)setError(errorMessage(e))});return()=>{active=false}},[id]);
  const close=()=>{if(busy||childBusy||!confirmUnsavedNavigation())return;onClose()};

@@ -24,8 +24,8 @@ ROLE_NAMES={"developer":"开发者","admin":"管理员","user":"普通用户","v
 
 def create_schema(connection):
     connection.execute("CREATE TABLE IF NOT EXISTS auth_users (user_id TEXT PRIMARY KEY,username TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,role TEXT NOT NULL,staff_id TEXT,password_hash TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,version INTEGER NOT NULL DEFAULT 1)")
-    connection.execute("CREATE TABLE IF NOT EXISTS auth_id_sequence (id INTEGER PRIMARY KEY CHECK(id=1),next_id INTEGER NOT NULL CHECK(next_id>=10001))")
-    connection.execute("INSERT OR IGNORE INTO auth_id_sequence VALUES (1,10001)")
+    connection.execute("CREATE TABLE IF NOT EXISTS auth_id_sequence (id INTEGER PRIMARY KEY CHECK(id=1),next_id INTEGER NOT NULL CHECK(next_id>=10000))")
+    connection.execute("INSERT OR IGNORE INTO auth_id_sequence VALUES (1,10000)")
     connection.execute("CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,expires_at TEXT NOT NULL)")
     connection.execute("CREATE TABLE IF NOT EXISTS auth_attempts (attempt_key TEXT PRIMARY KEY,attempts INTEGER NOT NULL,window_start TEXT NOT NULL)")
 
@@ -124,6 +124,10 @@ class UserUpdate(BaseModel):
 
 def install_auth(app,connect,lock):
     from .d1_identity import wrap_connection,configuration as identity_configuration
+    config=identity_configuration()
+    if config and config.get('auth_service_url'):
+        from .remote_auth import install_auth_proxy
+        return install_auth_proxy(app,config)
     from .cloud_mode import enabled as cloud_enabled,GUEST_ID
     connect=wrap_connection(connect)
     identity_configured=bool(identity_configuration())
@@ -159,24 +163,24 @@ def install_auth(app,connect,lock):
 
     def validate_role(c,role,staff_id):
         if role not in ROLES:raise HTTPException(422,"请选择开发者、管理员、普通用户或只读用户")
-        expected={"developer":0,"admin":-1}.get(role)
+        expected={"developer":0,"admin":-1,"viewer":-1}.get(role)
         if staff_id is None or str(staff_id).strip()=="":
-            if expected is None:raise HTTPException(422,"普通用户和只读用户需填写正整数人员编号")
+            if expected is None:raise HTTPException(422,"普通用户需填写正整数人员编号")
             return str(expected)
         try:
             text=str(staff_id).strip()
             number=int(text)
             if str(number)!=text:raise ValueError()
         except (ValueError,TypeError):raise HTTPException(422,"人员编号必须是整数") from None
-        if expected is not None and number!=expected:raise HTTPException(422,"开发者人员编号为0，管理员人员编号为-1")
+        if expected is not None and number!=expected:raise HTTPException(422,"开发者人员编号为0，管理员和只读用户人员编号为-1")
         if expected is None and number<=0:raise HTTPException(422,"公司人员编号必须为正整数")
         return str(number)
 
     def next_user_id(c):
         row=c.execute("SELECT next_id FROM auth_id_sequence WHERE id=1").fetchone()
-        candidate=max(10001,int(row[0]))
+        candidate=max(10000,int(row[0]))
         highest=c.execute("SELECT MAX(CAST(user_id AS INTEGER)) FROM auth_users WHERE user_id NOT GLOB '*[^0-9]*' AND user_id<>''").fetchone()[0]
-        candidate=max(candidate,int(highest or 10000)+1)
+        candidate=max(candidate,int(highest or 9999)+1)
         c.execute("UPDATE auth_id_sequence SET next_id=? WHERE id=1",(candidate+1,))
         return str(candidate)
 
@@ -200,7 +204,8 @@ def install_auth(app,connect,lock):
                     transition=path.startswith("/api/work-orders/") and path.endswith("/transition")
                     allowed_roles={"developer","admin","user"} if transition else {"developer","admin"}
                     if user["role"] not in allowed_roles: return JSONResponse({"detail":"当前账号仅可查看，不能修改或审批维护任务"},status_code=403)
-            return await call_next(request)
+            from .data_sync import cached_business_response
+            return await cached_business_response(request,lambda:call_next(request))
         except HTTPException as exc:return JSONResponse({'detail':exc.detail},status_code=exc.status_code)
         finally: _principal.reset(token)
 

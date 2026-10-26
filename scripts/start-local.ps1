@@ -15,6 +15,10 @@ if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyCon
 if (-not $env:FACTORYPULSE_DATA_DIR) { $env:FACTORYPULSE_DATA_DIR = Join-Path $env:LOCALAPPDATA 'FactoryPulse\data' }
 $identityConfiguration = Join-Path $projectDirectory '.secrets\identity.json'
 if (-not $env:FACTORYPULSE_IDENTITY_CONFIG -and (Test-Path -LiteralPath $identityConfiguration)) { $env:FACTORYPULSE_IDENTITY_CONFIG = $identityConfiguration }
+$businessConfiguration = Join-Path $projectDirectory '.secrets\business.json'
+if (-not $env:FACTORYPULSE_BUSINESS_CONFIG) { $env:FACTORYPULSE_BUSINESS_CONFIG = $businessConfiguration }
+if (-not (Test-Path -LiteralPath $env:FACTORYPULSE_BUSINESS_CONFIG)) { throw '缺少 Cloudflare D1 业务配置；禁止创建或回退到本地数据库。' }
+$env:FACTORYPULSE_AUTO_BACKUP = '0'
 $runtimeTemporaryDirectory = Join-Path $env:FACTORYPULSE_DATA_DIR 'tmp'
 New-Item -ItemType Directory -Path $runtimeTemporaryDirectory -Force | Out-Null
 $env:TEMP = $runtimeTemporaryDirectory

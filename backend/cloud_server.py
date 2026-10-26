@@ -14,7 +14,6 @@ os.environ['FACTORYPULSE_SERVE_UI']='1'
 ui=Path(os.environ.get('FACTORYPULSE_UI_DIR',Path(__file__).resolve().parents[1]/'dist'))
 from .build_artifact import validate_build
 validate_build(ui)
-password=read_secret_file('FACTORYPULSE_CLOUD_ADMIN_PASSWORD_FILE')
 from .cloud_credentials import cipher,load_secret,save_secret
 cipher()  # Validate the key before accepting any traffic.
 from . import main
@@ -22,9 +21,9 @@ from .d1_identity import configuration,D1Store
 if configuration():
     _,identities=D1Store(configuration()).snapshot()
     if not identities['auth_users']:raise RuntimeError('D1账号中心尚未初始化')
-elif os.environ.get('FACTORYPULSE_TEST_ALLOW_ANONYMOUS')=='1':initialize_accounts(main.connect,main._lock,password)
+elif os.environ.get('FACTORYPULSE_TEST_ALLOW_ANONYMOUS')=='1':
+    initialize_accounts(main.connect,main._lock,read_secret_file('FACTORYPULSE_CLOUD_ADMIN_PASSWORD_FILE'))
 else:raise RuntimeError('必须配置 Cloudflare D1 账号中心')
-password=None
 main.credential_get=lambda:os.environ.get('FACTORYPULSE_AI_API_KEY') or load_secret(main.DATA_DIR)
 main.credential_set=lambda value:save_secret(main.DATA_DIR,value)
 main._api_key=main.credential_get()

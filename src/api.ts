@@ -1,3 +1,4 @@
+import {processedCache,type ReadResult} from "./data-cache";
 /** Shared failure handling. Mutations are never retried automatically. */
 const labels:Record<string,string>={username:"账号",display_name:"人员姓名",password:"密码",current_password:"当前密码",new_password:"新密码",role:"账号角色",active:"账号状态",on_hand:"实盘库存",actual_parts:"实际备件耗用",prediction_at:"预测时间",defer_until:"下次复核时间",equipment_id:"设备编号",staff_name:"人员姓名",skills:"技能",available_hours:"可用工时",shift_start:"班次开始",shift_end:"班次结束",start_at:"开始时间",end_at:"结束时间",due_at:"订单交期",window_start:"最早停机时间",window_end:"最晚恢复时间",maintenance_hours:"维修工时",maintenance_cost_cny:"维修费用",required_skill:"所需技能",required_staff_count:"参与人数",maintenance_budget_cny:"维修预算",available_staff_count:"可用人数",max_downtime_h:"累计停机工时",risk_threshold:"提醒分数线",actor:"操作人员",approver:"审批人员",note:"处理说明",actual_hours:"实际工时",actual_cost_cny:"实际费用",priority:"优先级",part_name:"备件名称",quantity:"需要数量",available_quantity:"可用库存",scenario_name:"排程条件名称",order_name:"订单名称",request_id:"操作编号",version:"记录版本"};
 type ValidationIssue={loc?:Array<string|number>;type?:string;msg?:string;ctx?:Record<string,unknown>};
@@ -39,7 +40,7 @@ export class ApiError extends Error{
 // Deployment address only: the same application and API contract run everywhere.
 const apiBase=(import.meta.env?.VITE_API_BASE_URL||"/api").replace(/\/$/,"");
 
-export async function apiRequest(path:string,options:RequestInit={},timeoutMs?:number){
+async function transport(path:string,options:RequestInit={},timeoutMs?:number):Promise<ReadResult>{
  const write=!!options.method&&options.method.toUpperCase()!=="GET";
  const controller=new AbortController();let timedOut=false;
  const cancel=()=>controller.abort();
@@ -48,11 +49,15 @@ export async function apiRequest(path:string,options:RequestInit={},timeoutMs?:n
  const timer=window.setTimeout(()=>{timedOut=true;controller.abort()},timeoutMs??(write?90000:30000));
  try{
   const response=await fetch(apiBase+path,{...options,credentials:"include",cache:options.cache||"no-store",signal:controller.signal});
+  const etag=response.headers?.get("ETag")||undefined;
+  if(response.status===304)return {data:null,status:304,etag};
   let body:unknown;
   try{body=await response.json()}catch{throw new ApiError(write?"服务没有返回可识别的结果。操作可能已提交，请先刷新记录确认。":"服务没有返回有效数据，请确认后端服务正在运行。",response.status)}
-  if(response.status===401&&!path.startsWith("/auth/")&&typeof window.dispatchEvent==="function")window.dispatchEvent(new CustomEvent("factorypulse:auth-expired"));
+  if(response.status===401){void processedCache.clear();if(!path.startsWith("/auth/")&&typeof window.dispatchEvent==="function")window.dispatchEvent(new CustomEvent("factorypulse:auth-expired"))}
   if(!response.ok)throw new ApiError(responseError(body,response.status),response.status);
-  return body as any;
+  let revisions:Record<string,number>|undefined;
+  try{const value=response.headers?.get("X-FP-Revisions");if(value)revisions=JSON.parse(value)}catch{}
+  return {data:body,status:response.status,etag,revisions,delta:response.headers?.get("X-FP-Delta")==="1"};
  }catch(error){
   if(error instanceof ApiError)throw error;
   if(timedOut)throw new ApiError(write?"等待超时，操作可能仍在处理中。请先刷新记录确认，避免重复提交。":"读取超时，请稍后刷新。",0);
@@ -62,3 +67,9 @@ export async function apiRequest(path:string,options:RequestInit={},timeoutMs?:n
 }
 
 export function errorMessage(error:unknown){return error instanceof Error?error.message:String(error)}
+
+export async function apiRequest(path:string,options:RequestInit={},timeoutMs?:number){
+ const method=(options.method||"GET").toUpperCase();
+ if(method!=="GET"){const result=await transport(path,options,timeoutMs);if(path==="/auth/logout")await processedCache.clear();else if(!path.startsWith("/auth/"))await processedCache.afterWrite();return result.data}
+ return processedCache.request(path,options,(target,extra)=>{const headers=new Headers(options.headers);for(const [key,value] of Object.entries(extra||{}))headers.set(key,value);return transport(target,{...options,headers},timeoutMs)});
+}

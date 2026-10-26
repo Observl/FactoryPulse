@@ -3,9 +3,13 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import ts from 'typescript';
 
+const cacheSource=await readFile(new URL("../src/data-cache.ts",import.meta.url),"utf8");
+const cacheCompiled=ts.transpileModule(cacheSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const cacheUrl="data:text/javascript;base64,"+Buffer.from(cacheCompiled).toString("base64");
+const withCache=source=>source.replace(/from ["']\.\/data-cache["']/g,"from "+JSON.stringify(cacheUrl));
 const source=await readFile(new URL('../src/api.ts',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
-const {apiRequest,responseError}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
+const {apiRequest,responseError}=await import('data:text/javascript;base64,'+Buffer.from(withCache(compiled)).toString('base64'));
 globalThis.window={setTimeout,clearTimeout};
 let calls=0;
 assert.match(responseError({detail:"Not Found"},404),/后端已更新并重启/);
@@ -31,6 +35,6 @@ globalThis.fetch=async(url,options)=>{target=url;credentials=options.credentials
 await apiRequest('/auth/status');assert.equal(target,'/api/auth/status');assert.equal(credentials,'include');
 const remoteSource=source.replace('import.meta.env?.VITE_API_BASE_URL','"https://identity.example/api"');
 const remoteCompiled=ts.transpileModule(remoteSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
-const remote=await import('data:text/javascript;base64,'+Buffer.from(remoteCompiled).toString('base64'));
+const remote=await import('data:text/javascript;base64,'+Buffer.from(withCache(remoteCompiled)).toString('base64'));
 await remote.apiRequest('/auth/status');assert.equal(target,'https://identity.example/api/auth/status');assert.equal(credentials,'include');
 console.log('10 API checks passed: failure handling, local routing and credentialed remote routing (mocked transport).');

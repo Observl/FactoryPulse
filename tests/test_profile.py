@@ -33,7 +33,7 @@ def test_admin_cannot_rename_another_user_using_account_management():
     admin=initialize();other=create_user(admin,'manager01','admin')
     result=client.post('/api/auth/users/'+other,headers=admin,json={'display_name':'他人改名','role':'admin','active':True,'version':1})
     assert result.status_code==403
-    result=client.post('/api/auth/users/'+other,headers=admin,json={'display_name':'manager01','role':'viewer','staff_id':'1','active':True,'version':1})
+    result=client.post('/api/auth/users/'+other,headers=admin,json={'display_name':'manager01','role':'viewer','staff_id':'-1','active':True,'version':1})
     assert result.status_code==200,result.text
 
 

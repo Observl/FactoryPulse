@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {Miniflare} from 'miniflare';
+import {sqlRead} from './sql-analysis.mjs';
+const fixture=JSON.parse(await readFile(new URL('../../outputs/database-v2/inplace-fixture.json',import.meta.url),'utf8'));
+const mf=new Miniflare({modules:true,script:'export default {fetch(){return new Response("fixture")}}',compatibilityDate:'2026-08-06',d1Databases:{DB:'v2-inplace',STALE:'v2-stale'}});
+try{
+ const db=await mf.getD1Database('DB'),stale=await mf.getD1Database('STALE');
+ for(const target of [db,stale])await target.batch(fixture.source.map(x=>target.prepare(x.sql).bind(...(x.params||[]))));
+ const migrate=target=>target.batch(fixture.plan.map(x=>target.prepare(x.sql).bind(...(x.params||[]))));
+ await stale.prepare('UPDATE fp_business_revision SET revision=revision+1').run();
+ await assert.rejects(()=>migrate(stale));
+ assert.equal((await stale.prepare("SELECT type FROM sqlite_master WHERE name='records'").first()).type,'table');
+ assert.equal(await stale.prepare("SELECT name FROM sqlite_master WHERE name='database_schema'").first(),null);
+ await migrate(db);
+ assert.equal((await db.prepare('SELECT migration_state FROM database_schema').first()).migration_state,'ready');
+ assert.equal((await db.prepare("SELECT type FROM sqlite_master WHERE name='records'").first()).type,'view');
+ await db.prepare('UPDATE records SET content=? WHERE table_name=? AND row_index=?').bind('{"equipment_id":"E1","equipment_name":"Updated"}','equipment',0).run();
+ assert.equal((await db.prepare('SELECT equipment_name FROM equipment').first()).equipment_name,'Updated');
+ const env={BUSINESS_DB:db,BUSINESS_SCHEMA_VERSION:'2',BUSINESS_DATABASE_ID:'unchanged-id'},user={role:'admin',staff_id:-1};
+ let response=await sqlRead(new Request('https://fixture/api/data-quality'),env,user),quality=await response.json();
+ assert.equal(quality.reading_count,0);assert.match(quality.quality_status,/没有/);
+ await db.prepare('INSERT INTO records VALUES(?,?,?)').bind('readings',0,JSON.stringify({reading_id:'R1',equipment_id:'E1',timestamp:'2026-01-01T00:00:00Z',failure:0,motor_current_a:9,_feature_fields:['motor_current_a']})).run();
+ response=await sqlRead(new Request('https://fixture/api/data-quality'),env,user);quality=await response.json();
+ assert.equal(quality.reading_count,1);assert.equal(quality.missing_rate,0);assert.equal(quality.computed_by,'cloudflare_d1_sql');
+ response=await sqlRead(new Request('https://fixture/api/overview'),env,user);const overview=await response.json();
+ assert.equal(response.status,200);assert.equal(overview.metrics.total,1);assert.equal(overview.devices[0].equipment_name,'Updated');
+ assert.equal(overview.devices[0].risk_available,false);
+ response=await sqlRead(new Request('https://fixture/api/analysis/equipment?equipment_id=E1'),env,user);const summary=await response.json();
+ assert.equal(summary.records[0].average_motor_current_a,9);
+ response=await sqlRead(new Request('https://fixture/api/analysis/quality?start_at=2026-01-01'),env,user);assert.equal(response.status,400);
+ response=await sqlRead(new Request('https://fixture/api/analysis/conflicts'),env,{role:'viewer'});assert.equal(response.status,403);
+ console.log('V2 atomic D1 migration and SQL reports passed: stale-snapshot rollback, legacy writes, quality, overview, aggregation, scope rejection and permissions.');
+}finally{await mf.dispose()}

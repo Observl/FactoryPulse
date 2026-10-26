@@ -1,11 +1,11 @@
 # 完整云端部署与集中账号
 
-所有环境运行同一套 React 页面、Python API、训练解释、SQL/Excel 导入、联合排程、审批、库存、时间轴、助手、备份恢复和审计。登录入口完全一致，账号统一使用 Cloudflare D1，访客一键进入，管理员输入账号密码。没有独立精简版或模拟业务成功。
+本地与目标服务器使用同一套 React 页面和 Python 业务代码，账号及业务数据统一读写 Cloudflare D1。当前 Workers 已部署完整前端和部分业务读取接口；完整排程、方案比较及其余修改接口仍需部署 Python 计算服务。不能将准备完成的部署配置描述为完整业务已经上线。
 
 ## 部署包
 
 - `Dockerfile`：构建完整前端与 Python 服务，使用非 root 用户、单个业务进程。
-- `compose.cloud.yaml`：Caddy HTTPS 入口、后端、持久业务卷、TLS 证书卷。
+- `compose.cloud.yaml`：Caddy HTTPS 入口、后端、上传文件及加密配置卷、TLS 证书卷；不使用本地业务数据库。
 - `backend/cloud_server.py`：完整云端启动入口，校验构建文件、账号配置和加密主密钥。
 - `backend/requirements-cloud.lock.txt`：Linux/Python 3.12 依赖锁，容器构建和启动需通过 CI 验证。
 - `.secrets/`：运行凭据，不进入 Git 或容器构建上下文。D1 令牌只由服务器读取。
@@ -26,7 +26,7 @@
 
 令牌写入配置文件同目录的 `cloudflare-d1-token`，不可写入前端、GitHub 公共仓库或日志。Cloudflare 当前账号令牌 UI 的 D1 权限为账号范围；不能将它描述成已限制为单个数据库。必须由所有者授权该范围后才能创建。不要授予其他产品权限。
 
-只有以下身份表上传 D1：账号与密码哈希、会话哈希、登录限流、教程进度和身份操作审计。设备、工单、模型数据继续在业务服务持久卷中。D1 不开放匿名 SQL 接口；网站账号的权限与 Cloudflare 控制台权限是两套独立权限。
+身份表存入账号 D1；设备、工单、库存、模型证据及业务审计存入业务 D1 `abc7cb74-5be4-49a2-827a-3bd8b639f257`。业务配置保存为 `.secrets/business.json`，格式同上，使用业务库 ID。生产运行禁止本地 SQLite，上传 SQLite/SQL 文件的旧路径已关闭，可使用 CSV/XLSX 导入。D1 不开放匿名 SQL 接口；网站权限与 Cloudflare 控制台权限相互独立。
 
 既有账号表升级运行：
 
@@ -42,7 +42,7 @@
 $env:FACTORYPULSE_IDENTITY_CONFIG=(Resolve-Path .secrets/identity.json).Path
 ```
 
-集中账号提交使用 D1 原子批处理及版本冲突校验，跨部署冲突返回 409；网络失败返回 503，不以本地副本替代认证。此实现为小规模参赛/验证账号设计，每次事务读取身份快照；大规模部署需进一步压测与专用身份服务设计。
+账号及业务提交使用 D1 原子批处理与版本冲突校验，跨部署冲突返回 409；网络失败返回 503，不回退到本地数据库。查询及事务工作表也在 D1。部署准备读取既有账号配置，不再索取或生成默认管理员密码。
 
 ## 服务器启动
 
@@ -60,7 +60,8 @@ sudo chmod 0640 .secrets/*
 
 ```sh
 cp deploy/cloud.env.example deploy/cloud.env
-# 编辑 FACTORYPULSE_DOMAIN 为实际域名，并设置 BUILD_COMMIT。
+# 编辑 FACTORYPULSE_DOMAIN 为计算服务域名，并设置 BUILD_COMMIT。
+# FACTORYPULSE_FRONTEND_ORIGIN 保留实际 Cloudflare 页面来源。
 docker compose --env-file deploy/cloud.env -f compose.cloud.yaml up -d --build
 docker compose --env-file deploy/cloud.env -f compose.cloud.yaml ps
 ```
@@ -71,6 +72,15 @@ docker compose --env-file deploy/cloud.env -f compose.cloud.yaml ps
 
 更新前停止写入并制作一致性业务备份，再更新镜像；保留 `factorypulse_data` 卷。`docker compose down` 不删除数据，**不要使用 `down -v`**。回退前确认数据库结构兼容，不能直接降级打开更高结构版本。
 
-D1 身份数据使用 Cloudflare 的备份/恢复机制管理；本地业务备份不包含集中账号恢复。加密主密钥必须单独备份，丢失后不能解密已保存 AI 密钥。禁止把主密钥备份到公开仓库。
+D1 账号及业务数据均由 Cloudflare 导出及 Time Travel 管理；本地数据库备份关闭。加密主密钥必须单独备份，丢失后不能解密已保存 AI 密钥。禁止把主密钥备份到公开仓库。
 
-服务器尚未提供时，只能完成部署包、隔离环境测试及容器 CI；不能宣称完整业务已经上线。GitHub Pages 发布相同的完整前端，但其自身不能执行 API；完整业务必须从已部署 Python 服务的地址访问。
+## 本地修改后发布
+
+1. 在本地修改同一套 Python/React 源码，数据始终访问 D1。
+2. 优先执行与改动相关的短时检查；完整训练、大数据导入、容器构建及全量验收另行安排。
+3. 上传源码到 GitHub。上传源码本身不会为 Workers 增加 Python 求解能力。
+4. 提供计算服务域名及服务器后，部署上述容器；将其 HTTPS 根地址设置为 Worker 的 `BUSINESS_API_ORIGIN`。
+5. Python 的允许来源必须包含 `FACTORYPULSE_FRONTEND_ORIGIN`。Worker 保留请求方法、参数、正文和 D1 会话 Cookie，Python 再验证账号权限并读写同一 D1。
+6. 先做一次小范围的读写与排程检查，再扩大验收范围。
+
+服务器尚未提供时，可以准备部署包及运行隔离短测，不能宣称完整业务已经上线。当前线上部分接口仍返回 501；接入真实 Python 服务后由该服务处理。

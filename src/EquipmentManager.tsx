@@ -1,3 +1,4 @@
+import {useApiUpdate} from "./useCachedData";
 import {ActionDialog} from "./components/ActionDialog";
 import {Button} from "./components/Button";
 import {DeviceIndicator} from "./DeviceIndicator";
@@ -31,6 +32,7 @@ export function EquipmentManager({focusedAlert="",focusedWorkOrder="",devices,da
  useEffect(()=>{if(auth.user)setApprover(auth.user.display_name)},[auth.user?.user_id,auth.user?.display_name]);
  useEffect(()=>{setHistoricalReview(null)},[dataVersion]);
  useEffect(()=>{if(loaded&&focusedAlert&&auth.canManage){const record=handled.find(item=>item.alert_id===focusedAlert&&item.dataset_version===dataVersion);if(record){setArea("预警复核");setHistoricalReview(record)}}},[focusedAlert,loaded,dataVersion]);
+ useApiUpdate(["/work-orders","/alerts"],(path,body)=>{if(path==="/work-orders")setOrders(body.records||[]);else setHandled(body.records||[]);setLoaded(true)});
  const risks=useMemo(()=>[...devices].filter(d=>((d.risk_available!==false&&(d.review_required??d.risk_score>=.15))||handled.some(a=>a.dataset_version===dataVersion&&a.equipment_id===d.equipment_id&&a.prediction_at===d.prediction_at&&a.status==="已延期"&&a.defer_until&&new Date(a.defer_until)<=new Date()))&&!handled.some(a=>a.dataset_version===dataVersion&&a.equipment_id===d.equipment_id&&a.prediction_at===d.prediction_at&&["已驳回","已转工单","已延期"].includes(a.status)&&!(a.status==="已延期"&&a.defer_until&&new Date(a.defer_until)<=new Date()))).sort((a,b)=>b.risk_score-a.risk_score),[devices,handled,dataVersion]);
  const alertRequest=useRef({signature:"",id:""});
  const versionRef=useRef(dataVersion);versionRef.current=dataVersion;

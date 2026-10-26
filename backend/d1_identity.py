@@ -1,15 +1,15 @@
 """D1-backed identity transactions with optimistic revision checks and no offline fallback.
 
-Only identity tables live remotely. Existing validated auth SQL runs against a transient
-snapshot; its write set is replayed in a single D1 batch guarded by a compare-and-swap.
-This preserves branching validations and prevents lost updates between deployments.
+Identity lookups, compatibility projections and transaction workspaces run on D1.
+No local file or in-memory SQLite database is created.
 """
 import hashlib
 import json
 import os
 import re
 import secrets
-import sqlite3
+import time
+import logging
 from pathlib import Path
 import httpx
 from fastapi import HTTPException
@@ -39,14 +39,22 @@ class D1Store:
     def __init__(self,config):
         self.config=config
         self.url=f"https://api.cloudflare.com/client/v4/accounts/{config['account_id']}/d1/database/{config['database_id']}/query"
+        self.client=httpx.Client(timeout=30,trust_env=not config.get('direct_https',False)) if config.get('persistent_connection') else None
 
     def batch(self,statements):
-        try:
-            token=Path(self.config['token_file']).read_text(encoding='utf-8').strip()
-            if not token:raise ValueError()
-            response=httpx.post(self.url,headers={'Authorization':'Bearer '+token},json={'batch':statements},timeout=20)
-            body=response.json()
-        except (OSError,ValueError,httpx.HTTPError):raise HTTPException(503,'无法连接账号中心，未使用离线账号放行') from None
+        safe=all(re.match(r'\s*(SELECT\b|PRAGMA\s+\w+\s*(?:\([^)]*\))?\s*$|CREATE\s+(?:TABLE|INDEX)\s+IF\s+NOT\s+EXISTS\b)',item['sql'],re.I) for item in statements)
+        for attempt in range(3 if safe else 1):
+            try:
+                token=Path(self.config['token_file']).read_text(encoding='utf-8').strip()
+                if not token:raise ValueError()
+                sender=self.client.post if self.client is not None else httpx.post
+                response=sender(self.url,headers={'Authorization':'Bearer '+token},json={'batch':statements},timeout=30 if self.client is not None else 20)
+                body=response.json()
+                break
+            except (OSError,ValueError,httpx.HTTPError) as error:
+                logging.getLogger(__name__).warning('D1 transport failure: %s; statements=%d; retryable=%s',type(error).__name__,len(statements),safe)
+                if safe and attempt<2:time.sleep(.25*(attempt+1));continue
+                raise HTTPException(503,'无法连接 Cloudflare 数据中心，未使用离线数据库放行') from None
         if not response.is_success or not body.get('success') or any(not r.get('success') for r in body.get('result',[])):
             # Never return remote query text, parameters, secrets, or password hashes.
             message=json.dumps(body.get('errors',[]))
@@ -55,7 +63,7 @@ class D1Store:
         return body['result']
 
     def snapshot(self):
-        result=self.batch([{'sql':'SELECT revision FROM fp_identity_revision WHERE id=1'}]+[{'sql':'SELECT * FROM '+table} for table in TABLES]+[{'sql':"SELECT COALESCE(MAX(seq),10000) AS high_id FROM sqlite_sequence WHERE name='auth_users'"}])
+        result=self.batch([{'sql':'SELECT revision FROM fp_identity_revision WHERE id=1'}]+[{'sql':'SELECT * FROM '+table} for table in TABLES]+[{'sql':"SELECT COALESCE(MAX(seq),9999) AS high_id FROM sqlite_sequence WHERE name='auth_users'"}])
         if not result[0].get('results'):raise HTTPException(503,'账号中心尚未初始化')
         rows={name:r.get('results',[]) for name,r in zip(TABLES,result[1:])}
         if rows['auth_id_sequence']:
@@ -69,53 +77,39 @@ class D1Store:
         self.batch(guard+writes)
 
 class IdentityConnection:
-    def __init__(self,store,local_connect):
-        from .security import create_schema
-        self.store=store;self.revision,rows=store.snapshot();self.writes=[]
-        self.db=sqlite3.connect(':memory:');self.db.row_factory=sqlite3.Row
-        create_schema(self.db)
-        self.db.execute('CREATE TABLE audit_events(event_id INTEGER PRIMARY KEY AUTOINCREMENT,event_type TEXT,entity_id TEXT,content TEXT,created_at TEXT)')
-        self.db.execute('CREATE TABLE records(table_name TEXT,row_index INTEGER,content TEXT)')
-        self.db.execute("DELETE FROM auth_id_sequence")
-        for table,records in rows.items():
-            for record in records:
-                record=dict(record)
-                if table=="auth_users":
-                    record["username"]=str(record["user_id"])
-                    record["role"]=ROLE_CODES.get(record["role"],record["role"])
-                fields=list(record)
-                if any(not re.fullmatch('[a-z_]+',name) for name in fields):raise HTTPException(503,'账号中心结构异常')
-                self.db.execute(f"INSERT INTO {table} ({','.join(fields)}) VALUES ({','.join('?' for _ in fields)})",list(record.values()))
-        with local_connect() as local:
-            staff=local.execute("SELECT table_name,row_index,content FROM records WHERE table_name='staff'").fetchall()
-        self.db.executemany('INSERT INTO records VALUES (?,?,?)',[tuple(row) for row in staff]);self.db.commit()
+    # Retain the public constructor for existing integrations; no local snapshot.
+    def __new__(cls,store,local_connect=None):return RemoteIdentityConnection(store)
 
-    def __enter__(self):return self
-    def execute(self,sql,params=()):
-        keyword=sql.strip().split()[0].upper()
-        if keyword not in {'SELECT','INSERT','UPDATE','DELETE','REPLACE','BEGIN'}:raise RuntimeError('Unsupported identity SQL')
-        cursor=self.db.execute(sql,params)
-        if keyword in {'INSERT','UPDATE','DELETE','REPLACE'}:
-            remote_sql=sql;remote_params=list(params)
-            # The compatibility snapshot exposes username as the immutable numeric ID;
-            # D1 stores no username column.
-            if re.match(r"INSERT INTO auth_users VALUES",sql,re.I):
-                remote_sql="INSERT INTO auth_users(user_id,display_name,role,staff_id,password_hash,active,version) VALUES (?,?,?,?,?,1,1)"
-                remote_params.pop(1)
-                remote_params[2]=ROLE_LABELS.get(remote_params[2],remote_params[2])
-            elif re.match(r"UPDATE auth_users SET username=\?,",sql,re.I):
-                remote_sql=sql.replace("username=?,", "",1);remote_params.pop(0)
-            if re.match(r"UPDATE auth_users SET display_name=\?,role=\?,",remote_sql,re.I):
-                remote_params[1]=ROLE_LABELS.get(remote_params[1],remote_params[1])
-            self.writes.append({'sql':remote_sql,'params':remote_params})
-        return cursor
-    def __exit__(self,kind,error,tb):
-        try:
-            if kind is None and self.writes:self.store.commit(self.revision,self.writes)
-        finally:self.db.close()
 
 def wrap_connection(local_connect):
     config=configuration()
     if not config:return local_connect
     store=D1Store(config)
-    return lambda:IdentityConnection(store,local_connect)
+    return lambda:RemoteIdentityConnection(store)
+
+
+class RemoteIdentityConnection:
+    """Compatibility projection evaluated on D1, without a local SQLite snapshot."""
+    def __init__(self,store):
+        from .d1_business import Connection
+        self.connection=Connection(store,'fp_identity_revision','fp_identity_guard')
+        self.connection.baseline()
+    def __enter__(self):return self
+    def __exit__(self,*args):return self.connection.__exit__(*args)
+    def execute(self,sql,params=()):
+        remote_sql=sql;values=list(params)
+        if re.match(r'INSERT INTO auth_users VALUES',sql,re.I):
+            remote_sql='INSERT INTO auth_users(user_id,display_name,role,staff_id,password_hash,active,version) VALUES (?,?,?,?,?,1,1)'
+            values.pop(1);values[2]=ROLE_LABELS.get(values[2],values[2])
+        elif re.match(r'UPDATE auth_users SET username=\?,',sql,re.I):
+            remote_sql=sql.replace('username=?,','',1);values.pop(0)
+        if re.match(r'UPDATE auth_users SET display_name=\?,role=\?,',remote_sql,re.I):values[1]=ROLE_LABELS.get(values[1],values[1])
+        if re.match(r'\s*SELECT\b',remote_sql,re.I) and re.search(r'\bauth_users\b',remote_sql):
+            from .d1_business import identifiers,Cursor
+            c=self.connection;c.baseline()
+            table=c.tables.get('auth_users','auth_users')
+            cases=' '.join("WHEN '"+label+"' THEN '"+code+"'" for label,code in ROLE_CODES.items())
+            projection=f'(SELECT CAST(user_id AS TEXT) AS user_id,CAST(user_id AS TEXT) AS username,display_name,CASE role {cases} ELSE role END AS role,CAST(staff_id AS TEXT) AS staff_id,password_hash,active,version FROM "{table}")'
+            mapped=identifiers(remote_sql,{**c.tables,'auth_users':projection})
+            return Cursor(c.query(mapped,values))
+        return self.connection.execute(remote_sql,values)

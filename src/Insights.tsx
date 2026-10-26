@@ -1,3 +1,6 @@
+import {GlowDonut} from "./components/GlowDonut";
+import {useApiUpdate} from "./useCachedData";
+import {GlowBars,DotHistogram} from "./components/DesignCharts";
 import {apiRequest} from "./api";
 import {ExplainText} from "./ProfessionalTerm";
 import { useEffect, useMemo, useState } from "react";
@@ -53,18 +56,18 @@ export function RiskInsights({devices,onOpenDevice,ready=true}:{ready?:boolean;d
     <Stat label="高风险设备" value={ready?high:"--"} desc="风险评分 > 35分" accent/>
     <Stat label="中风险设备" value={ready?mid:"--"} desc="风险评分 15–35分"/>
     <Stat label="低风险设备" value={ready?low:"--"} desc="风险评分 < 15分"/>
-    <Stat label="平均风险评分" value={ready?<Figure value={averageRisk} suffix=" 分" digits={2}/>:"--"} desc={`${riskWindow} · 未经概率校准`}/>
+    <Stat label="平均风险评分" value={ready?<Figure value={averageRisk} suffix=" 分" digits={2}/>:"--"} desc={`${riskWindow}`}/>
   </div>
   <div className="content-grid">
-    <Panel title={`${riskWindow}故障风险 TOP 10`} note="风险评分 · 点击设备进入详情">
-     {top.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={top} layout="vertical" margin={{left:10,right:20}}><CartesianGrid stroke="#eff1f4" horizontal={false}/><XAxis type="number" domain={[0,100]} unit="分"/><YAxis type="category" dataKey="name" width={82} tick={{fontSize:11}}/><Tooltip formatter={(v)=>[String(v)+" 分",`${riskWindow}风险评分`]}/><Bar dataKey="risk" fill="#FF7A1A" radius={[0,5,5,0]}>{top.map(device=><Cell key={device.name} cursor="pointer" onClick={()=>onOpenDevice(device.name)}/>)}</Bar></BarChart></ResponsiveContainer></div>:<Placeholder message={ready?"暂无风险评分数据":"--"}/>}
+    <Panel title={`${riskWindow}故障风险 TOP 10`} note="风险评分 · 点击查看详情">
+     {top.length?<GlowBars data={top.map(d=>({name:d.name,value:d.risk}))} onSelect={onOpenDevice}/>:<Placeholder message={ready?"暂无风险评分数据":"--"}/>}
     </Panel>
-    <Panel title="风险等级结构" note="15分 / 35分 为展示分段，非模型提醒线">
-     {devices.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={dist} dataKey="value" nameKey="name" innerRadius={52} outerRadius={91} label>{dist.map((_,i)=><Cell key={i} fill={["#94a3b8","#FFBD87","#FF7A1A"][i]}/>)}</Pie><Tooltip/><Legend/></PieChart></ResponsiveContainer></div>:<Placeholder message={ready?"暂无风险分布数据":"--"}/>}
+    <Panel title="风险等级结构" note="等级分段：15 / 35 分">
+     {devices.length?<GlowDonut data={dist}/>:<Placeholder message={ready?"暂无风险分布数据":"--"}/>}
     </Panel>
   </div>
   {devices.some(device=>device.risk_available===false)&&<p className="hint">有 {devices.filter(device=>device.risk_available===false).length} 台设备证据不足，未纳入风险排行。这不表示它们安全。</p>}
-  <p className="insight-note">排行用于复核排序，不代表故障概率。等级分段仅作展示；工作台提醒采用模型验证集确定的提醒线。点击柱形可进入设备详情，查看阈值依据、近期工况变化、模型参考分与指标影响说明。</p>
+  <p className="insight-note">点击设备查看详情。</p>
  </>;
 }
 
@@ -78,6 +81,7 @@ export function AnomalyInsights({devices,version}:{devices:Device[];version:stri
   return()=>{active=false};
  },[version]);
  useEffect(()=>{if(!devices.find(d=>d.equipment_id===selected))setSelected(devices[0]?.equipment_id||"")},[devices,selected]);
+ useApiUpdate(["/records/readings?limit=5000"],(_path,body)=>setReadings(body.records||[]));
  const d=devices.find(x=>x.equipment_id===selected);
  const history=readings.filter(r=>r.equipment_id===selected).sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||""))).slice(-60);
  const trend=history.map((r,i)=>({time:String(r.timestamp||i).slice(5,16),temperature:toNum(r.process_temperature_k),speed:toNum(r.rotational_speed_rpm),wear:toNum(r.tool_wear_min)}));
@@ -94,7 +98,7 @@ export function AnomalyInsights({devices,version}:{devices:Device[];version:stri
   </div>
   <div className="content-grid">
    <Panel title="设备工艺温度对比" note="各设备最新监测值">
-    {tempComparison.length?<div className="insight-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={tempComparison}><CartesianGrid stroke="#eff1f4" vertical={false}/><XAxis dataKey="name" tick={{fontSize:10}}/><YAxis domain={["auto","auto"]} unit=" K"/><Tooltip formatter={v=>[String(v)+" K","工艺温度"]}/><Bar dataKey="temperature" fill="#FF7A1A" radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></div>:<Placeholder message="暂无温度监测记录"/>}
+    {tempComparison.length?<DotHistogram data={tempComparison.map(d=>({name:d.name,value:d.temperature!}))} max={Math.ceil(Math.max(...tempComparison.map(d=>d.temperature!))/50)*50} unit="K"/>:<Placeholder message="暂无温度监测记录"/>}
    </Panel>
    <Panel title="单台设备工况趋势" note="历史监测采样">
     <label className="insight-select-label">选择设备<select value={selected} onChange={e=>setSelected(e.target.value)}>{devices.map(x=><option key={x.equipment_id} value={x.equipment_id}>{x.equipment_id} · {x.equipment_name}</option>)}</select></label>

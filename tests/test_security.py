@@ -21,7 +21,7 @@ def login(name,password=PASSWORD):
 
 
 def create_user(admin,name,role,staff_id=None):
-    if staff_id is None and role in {"user","viewer"}:staff_id="1"
+    if staff_id is None and role in {"user","viewer"}:staff_id="-1" if role=="viewer" else "1"
     response=client.post("/api/auth/users",headers=admin,json={"username":name,"password":PASSWORD,"display_name":name,"role":role,"staff_id":staff_id})
     assert response.status_code==200,response.text
     return response.json()["user_id"]

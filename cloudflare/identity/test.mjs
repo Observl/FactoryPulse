@@ -34,9 +34,10 @@ try{
  status(await call('/auth/onboarding','POST',{step:5}),409);
  for(let step=1;step<=5;step++)status(await call('/auth/onboarding','POST',{step}),200);
  assert.ok(status(await call('/auth/status'),200).body.onboarding.completed_at);
- status(await call('/auth/users/10001','POST',{display_name:'Owner',role:'viewer',staff_id:1,active:false,version:1}),409);
+ status(await call('/auth/users/10001','POST',{display_name:'Owner',role:'viewer',staff_id:-1,active:false,version:1}),409);
  status(await call('/auth/users','POST',{display_name:'Invalid',role:'user',staff_id:0,password:viewerPassword}),422);
- const viewer=status(await call('/auth/users','POST',{display_name:'Viewer',role:'viewer',staff_id:1,password:viewerPassword}),200);assert.equal(viewer.body.user_id,'10002');
+ for(const staff_id of [-2,0,1,1.5])status(await call('/auth/users','POST',{display_name:'Invalid viewer',role:'viewer',staff_id,password:viewerPassword}),422);
+ const viewer=status(await call('/auth/users','POST',{display_name:'Viewer',role:'viewer',staff_id:-1,password:viewerPassword}),200);assert.equal(viewer.body.user_id,'10002');
  const normal=status(await call('/auth/users','POST',{display_name:'Normal',role:'user',staff_id:2,password:viewerPassword}),200);assert.equal(normal.body.user_id,'10003');
  const list=status(await call('/auth/users'),200);assert.equal(list.body.records.length,3);assert.ok(!JSON.stringify(list.body).includes('password_hash'));
  const row=await db.prepare('SELECT * FROM auth_users WHERE user_id=10003').first();assert.equal(row.role,'普通用户');assert.equal(row.staff_id,2);assert.equal(row.password_hash,digest(viewerPassword));assert.ok(!('username' in row));

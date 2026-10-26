@@ -18,7 +18,7 @@ class FakeD1(D1Store):
                 c.execute('BEGIN IMMEDIATE')
                 for statement in statements:
                     cursor=c.execute(statement['sql'],statement.get('params',[]))
-                    output.append({'success':True,'results':[dict(row) for row in cursor.fetchall()]})
+                    output.append({'success':True,'results':[dict(row) for row in cursor.fetchall()],'meta':{'changes':max(0,cursor.rowcount),'last_row_id':cursor.lastrowid}})
                 return output
             except sqlite3.IntegrityError as exc:
                 if 'fp_identity_guard' in str(exc):raise HTTPException(409,'conflict') from None

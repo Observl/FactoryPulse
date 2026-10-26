@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {syncedRead,delta} from './data-sync.mjs';
+let revision=1,calls=0,value={records:[{id:1,n:2},{id:2,n:3}],padding:'unchanged'.repeat(100)};
+const env={BUSINESS_DATABASE_ID:'fixture',BUSINESS_DB:{prepare(){return {async all(){return {results:[{resource:'records/equipment',revision},{resource:'__source__',revision:'v1'}]}}}}}};
+const user={user_id:'12345',version:1,role:'viewer'};
+const handler=async()=>{calls++;return Response.json(value)};
+const request=(path,headers={})=>new Request('https://fixture'+path,{headers});
+let response=await syncedRead(request('/api/records/equipment'),env,user,handler),tag=response.headers.get('ETag');
+assert.equal(response.status,200);assert.ok(tag);assert.equal(calls,1);
+response=await syncedRead(request('/api/records/equipment',{'If-None-Match':tag}),env,user,handler);assert.equal(response.status,304);assert.equal(calls,1);
+revision++;value={...value,records:[{id:1,n:4}]};
+response=await syncedRead(request('/api/records/equipment',{'If-None-Match':tag,'X-FP-Delta-Base':tag}),env,user,handler);
+assert.equal(response.headers.get('X-FP-Delta'),'1');const patch=await response.json();assert.equal(patch.base,tag);assert.ok(patch.patch.some(x=>x.op==='remove'));
+response=await syncedRead(request('/api/data/revisions'),env,user,handler);tag=response.headers.get('ETag');assert.equal((await response.json()).identity,'12345:1:viewer');
+response=await syncedRead(request('/api/data/revisions',{'If-None-Match':tag}),env,{...user,version:2},handler);assert.equal(response.status,200);
+assert.deepEqual(delta([1,2,3],[1]),[{op:'remove',path:[2]},{op:'remove',path:[1]}]);
+response=await syncedRead(request('/api/records/equipment'),env,user,async()=>{revision++;return Response.json(value)});assert.equal(response.headers.get('ETag'),null);
+console.log('Workers sync passed: conditional reads, deltas, deletions, identity isolation, concurrent changes');

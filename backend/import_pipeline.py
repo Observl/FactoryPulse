@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 import uuid
@@ -75,6 +76,8 @@ def convert_unit(value, target, unit):
 
 
 def install_import_pipeline(app, connect, settings_get, lock, directory:Path):
+    remote=os.environ.get("FACTORYPULSE_TEST_ALLOW_ANONYMOUS")!="1"
+    from .d1_business import RemoteStage
     executor=ThreadPoolExecutor(max_workers=2,thread_name_prefix="factorypulse-import")
     cancellations={}
     with connect() as connection:
@@ -83,7 +86,7 @@ def install_import_pipeline(app, connect, settings_get, lock, directory:Path):
         connection.execute("CREATE TABLE IF NOT EXISTS archived_records (version TEXT NOT NULL,table_name TEXT NOT NULL,row_index INTEGER NOT NULL,content TEXT NOT NULL,PRIMARY KEY(version,table_name,row_index))")
         for row in connection.execute("SELECT * FROM import_jobs"):
             job=json.loads(row["content"])
-            missing_preview=job["status"]=="ready" and not (directory/(job["job_id"]+"-stage.sqlite3")).is_file()
+            missing_preview=job["status"]=="ready" and not (RemoteStage(job["job_id"]).exists() if remote else (directory/(job["job_id"]+"-stage.sqlite3")).is_file())
             if job["status"] in {"queued","validating"} or missing_preview:
                 job.update(status="interrupted",message="导入预览临时文件缺失，请重新上传并校验；当前业务数据保留" if missing_preview else "服务重启中断了校验，请重新发起预览")
                 connection.execute("UPDATE import_jobs SET content=? WHERE job_id=?",(json.dumps(job,ensure_ascii=False),row["job_id"]))
@@ -112,7 +115,7 @@ def install_import_pipeline(app, connect, settings_get, lock, directory:Path):
         connection=None
         try:
             job.update(status="validating",message="逐批校验文件，尚未修改当前数据");save(job)
-            connection=sqlite3.connect(stage)
+            connection=RemoteStage(job["job_id"]) if remote else sqlite3.connect(stage)
             # SQLite label derivation can outlast row parsing on large files.
             connection.set_progress_handler(lambda:int(cancellation.is_set()),1000)
             connection.execute("CREATE TABLE staged (row_index INTEGER PRIMARY KEY,equipment_id TEXT NOT NULL,timestamp TEXT NOT NULL,failure INTEGER,content TEXT NOT NULL,UNIQUE(equipment_id,timestamp))")
@@ -233,15 +236,21 @@ def install_import_pipeline(app, connect, settings_get, lock, directory:Path):
             latest=json.loads(connection.execute("SELECT content FROM import_jobs WHERE job_id=?",(job["job_id"],)).fetchone()[0])
             if latest["status"]=="committed": return latest["result"]
             if latest["status"]!="ready": raise HTTPException(409,"预览已取消或改变，请重新校验")
-            if not stage.is_file(): raise HTTPException(409,"导入预览临时文件缺失，请重新上传并校验；当前数据未改变")
-            try:
-                with closing(sqlite3.connect(stage.resolve().as_uri()+"?mode=ro",uri=True)) as checked:
-                    if checked.execute("PRAGMA quick_check").fetchall()!=[("ok",)]: raise ValueError("预览文件完整性检查失败")
-                    count=checked.execute("SELECT COUNT(*) FROM staged").fetchone()[0]
-                    checked.execute("SELECT COUNT(*) FROM onsets").fetchone()
-                    if count!=latest["valid_rows"]: raise ValueError("预览记录数已变化")
-            except (sqlite3.Error,ValueError) as exc:
-                raise HTTPException(409,"导入预览临时文件损坏或不完整，请重新上传并校验；当前数据未改变") from exc
+            if remote:
+                checked=RemoteStage(job["job_id"])
+                if not checked.exists(): raise HTTPException(409,"云端预览不存在，请重新校验")
+                if checked.execute("SELECT COUNT(*) FROM staged").fetchone()[0]!=latest["valid_rows"]: raise HTTPException(409,"云端预览记录数已变化")
+                connection.stage_prefix=checked.prefix
+            else:
+                if not stage.is_file(): raise HTTPException(409,"导入预览临时文件缺失，请重新上传并校验；当前数据未改变")
+                try:
+                    with closing(sqlite3.connect(stage.resolve().as_uri()+"?mode=ro",uri=True)) as checked:
+                        if checked.execute("PRAGMA quick_check").fetchall()!=[("ok",)]: raise ValueError("预览文件完整性检查失败")
+                        count=checked.execute("SELECT COUNT(*) FROM staged").fetchone()[0]
+                        checked.execute("SELECT COUNT(*) FROM onsets").fetchone()
+                        if count!=latest["valid_rows"]: raise ValueError("预览记录数已变化")
+                except (sqlite3.Error,ValueError) as exc:
+                    raise HTTPException(409,"导入预览临时文件损坏或不完整，请重新上传并校验；当前数据未改变") from exc
             current=connection.execute("SELECT value FROM settings WHERE key='last_sync_at'").fetchone()
             current=current[0] if current else ""
             if current!=payload.expected_dataset_version or current!=job["expected_dataset_version"]: raise HTTPException(409,"当前数据已被更新，请重新预览以避免覆盖他人导入")
@@ -250,7 +259,7 @@ def install_import_pipeline(app, connect, settings_get, lock, directory:Path):
             if current:
                 connection.execute("INSERT OR IGNORE INTO dataset_versions VALUES (?,?,?)",(current,json.dumps(metadata,ensure_ascii=False),now))
                 connection.execute("INSERT OR IGNORE INTO archived_records SELECT ?,table_name,row_index,content FROM records",(current,))
-            connection.execute("ATTACH DATABASE ? AS stage",(str(stage),))
+            if not remote:connection.execute("ATTACH DATABASE ? AS stage",(str(stage),))
             connection.execute("DELETE FROM records")
             connection.execute("INSERT INTO records SELECT 'readings',row_index,content FROM stage.staged")
             devices=connection.execute("SELECT equipment_id FROM stage.staged GROUP BY equipment_id ORDER BY equipment_id").fetchall()

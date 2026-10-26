@@ -1,3 +1,4 @@
+import {useApiUpdate} from "./useCachedData";
 import {Button} from "./components/Button";
 import {LoadingPanel} from "./LoadingPanel";
 import {useEffect,useState} from "react";
@@ -9,6 +10,7 @@ type Person={staff_id:string;staff_name?:string;skills?:string;shift_start?:stri
 type Order={order_id:string;equipment_id:string;order_name?:string;start_at?:string;end_at?:string;due_at?:string;related_work_orders:Work[]};
 export function ResourceOccupancy({kind,identifier,revision,onOpenWorkOrder}:{kind:"staff"|"orders";identifier:string;revision:number;onOpenWorkOrder?:(id:string)=>void}){
  const [data,setData]=useState<{staff:Person[];orders:Order[]}|null>(null),[error,setError]=useState("");
+ useApiUpdate(["/operations/resource-occupancy"],(_path,body)=>{setData(body);setError("")});
  useEffect(()=>{let active=true;setData(null);setError("");apiRequest("/operations/resource-occupancy").then(value=>{if(active)setData(value)}).catch(reason=>{if(active)setError(errorMessage(reason))});return()=>{active=false}},[revision]);
  const selected=kind==="staff"?data?.staff.filter(person=>!identifier||person.staff_id===identifier):data?.orders.filter(order=>!identifier||order.order_id===identifier);
  const work=(items:Work[])=>items.length?<ul>{items.map(item=><li key={item.work_order_id}><Button className="text-link" disabled={!onOpenWorkOrder} onClick={()=>onOpenWorkOrder?.(item.work_order_id)}>{item.work_order_id}</Button> · {item.status} · {item.start_at||"时间未提供"} 至 {item.end_at||"未提供"}{!item.current_dataset?" · 其他数据版本":""}</li>)}</ul>:<span>暂无未闭环关联工单</span>;

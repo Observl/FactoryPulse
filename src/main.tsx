@@ -10,8 +10,15 @@ import "./ui-consistency.css";
 import "./workflow-polish.css";
 import "./pearl-glass.css";
 import "./button-system.css";
+import "./liquid-glass.css";
+import "./progressive-disclosure.css";
 
 async function start() {
+  if(import.meta.env.DEV&&new URLSearchParams(window.location.search).has('component-preview')){
+    const {default:DesignPreview}=await import('./DesignPreview');
+    createRoot(document.getElementById('root')!).render(<React.StrictMode><DesignPreview/></React.StrictMode>);
+    return;
+  }
   const {default:App}=await import("./App");
   createRoot(document.getElementById("root")!).render(<React.StrictMode><AppRecovery><AuthGate><App /></AuthGate></AppRecovery></React.StrictMode>);
 }

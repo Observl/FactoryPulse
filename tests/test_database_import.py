@@ -67,7 +67,7 @@ def test_database_import_requires_authorized_manager(tmp_path):
     path=database(tmp_path)
     admin=client.post('/api/auth/bootstrap',json={'username':'developer','display_name':'测试管理员','password':'test-database-password-2026'})
     assert admin.status_code==200,admin.text
-    assert client.post('/api/auth/users',headers={'Cookie':f'{COOKIE}={admin.cookies.get(COOKIE)}'},json={'username':'viewer','display_name':'只读','password':'test-database-password-2026','role':'viewer','staff_id':1}).status_code==200
+    assert client.post('/api/auth/users',headers={'Cookie':f'{COOKIE}={admin.cookies.get(COOKIE)}'},json={'username':'viewer','display_name':'只读','password':'test-database-password-2026','role':'viewer','staff_id':-1}).status_code==200
     client.post('/api/auth/logout')
     assert client.post('/api/import/database/inspect',files={'file':('test.db',path.read_bytes())}).status_code==401
     viewer=client.post('/api/auth/login',json={'username':'viewer','password':'test-database-password-2026'})

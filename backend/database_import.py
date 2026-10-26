@@ -1,6 +1,6 @@
 """Read uploaded SQLite tables into the existing staged sensor-import workflow."""
 from __future__ import annotations
-import asyncio,csv,io,json,sqlite3,uuid
+import asyncio,csv,io,json,sqlite3,uuid,os
 from pathlib import Path
 from contextlib import closing
 from fastapi import File,HTTPException,UploadFile
@@ -71,6 +71,8 @@ class Selection(BaseModel):
 def install_database_import(app,directory,analyze):
     @app.post('/api/import/database/inspect')
     async def inspect(file:UploadFile=File(...)):
+        if os.environ.get('FACTORYPULSE_TEST_ALLOW_ANONYMOUS')!='1':
+            raise HTTPException(422,'当前仅使用 Cloudflare D1，不会创建或打开本地数据库；请将监测表导出为 CSV / XLSX 后导入。')
         suffix=Path(file.filename or '').suffix.lower()
         if suffix not in {'.db','.sqlite','.sqlite3','.sql'}:raise HTTPException(422,'请选择 SQLite 数据库或兼容的 .sql 导出文件')
         identifier=str(uuid.uuid4());path=directory/(identifier+'-source.sqlite3')

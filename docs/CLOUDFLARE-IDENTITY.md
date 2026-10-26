@@ -8,6 +8,8 @@ Cloudflare 主站、GitHub Pages 与本机使用同一个完整 React 应用及�
 | Cloudflare 主站 | `https://factorypulse.griffonage2077.workers.dev`，页面与 `/api/auth/*` 同源，Worker 绑定现有 D1 |
 | GitHub Pages 镜像 | 同一完整页面，账号请求发往 Cloudflare 主站 |
 
+账号编号为大于等于 10000 的整数，自动分配时递增且不复用已删除编号。`staff_id` 必须为大于等于 -1 的整数：开发者固定为 0，管理员和只读用户固定为 -1，普通用户为正整数。数据库 CHECK、Worker、Python 接口及账号表单使用相同规则。
+
 网站仍使用用户编号和用户自己配置的密码登录。D1 中的账号、密码哈希、启用状态、四类角色、教程进度和会话是同一份数据。修改密码会使其他入口的旧会话失效。不会创建默认管理员或改写现有账号密码。
 
 账号服务源码位于 `cloudflare/identity/worker.mjs`，绑定 `factorypulse_users` 为 `DB`。数据库令牌不放进 Worker 源码或浏览器。外部只能调用经过权限检查的账号接口，没有公开 SQL 查询接口。
