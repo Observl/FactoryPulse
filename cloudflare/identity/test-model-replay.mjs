@@ -7,8 +7,9 @@ const maintenance=[{equipment_id:'E1',maintenance_date:'2026-01-03T13:00:00',mai
 const timeline=eventTimeline(series,faults,maintenance);
 assert.equal(timeline.filter(x=>x.kind==='alert').length,2);assert.equal(timeline.filter(x=>x.kind==='maintenance').length,1);assert.equal(timeline.filter(x=>x.kind==='failure').length,1);
 const row={run_id:'RUN1',dataset_version:'V1',model_version:'MODEL1',content:JSON.stringify({replay:series,summary:{xgboost:'ready',evaluation:{threshold:.6,events:faults}}})};
-const db={prepare(sql){return {bind(version){assert.equal(version,'V1');return {async first(){return row}}},async all(){return {results:maintenance.map(value=>({content:JSON.stringify(value)}))}}}}};
-let result=await modelReplay(db,'V1');assert.equal(result.run_id,'RUN1');assert.deepEqual(result.series,series);assert.deepEqual(result.events,faults);assert.equal(result.evaluation.threshold,.6);
+let maintenanceQueries=0;
+const db={prepare(sql){return {bind(value){if(sql.includes('prediction_runs')){assert.equal(value,'V1');return {async first(){return row}}}maintenanceQueries++;const bounds=JSON.parse(value);assert.equal(bounds.length,1);assert.equal(bounds[0].equipment_id,'E1');assert.match(sql,/JOIN records/);return {async all(){return {results:maintenance.map(value=>({content:JSON.stringify(value)}))}}}}}}};
+let result=await modelReplay(db,'V1');assert.equal(result.run_id,'RUN1');assert.equal(maintenanceQueries,1);assert.deepEqual(result.series,series);assert.deepEqual(result.events,faults);assert.equal(result.evaluation.threshold,.6);
 result=await modelReplay({prepare(){return {bind(){return {async first(){return null}}}}}},'V2');assert.deepEqual(result.series,[]);assert.equal(result.status,'unavailable');
 if(process.argv[2]){const fixture=JSON.parse(await readFile(process.argv[2],'utf8'));const actual=eventTimeline(fixture.series,fixture.faults,fixture.maintenance);assert.deepEqual(actual.map(x=>({...x,title:x.kind==='failure'?'真实故障开始':x.title})),fixture.expected);console.log('Production frozen replay parity passed:',fixture.series.length,'points,',actual.length,'timeline events')}
 console.log('Model replay tests passed: real evidence fields, alert episodes, maintenance boundaries, missing version');

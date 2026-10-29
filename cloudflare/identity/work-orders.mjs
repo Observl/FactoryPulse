@@ -21,15 +21,70 @@ const actor=u=>({actor_user_id:String(u.user_id),actor_role:u.role});
 
 class State{
  constructor(db,user){this.db=db;this.user=user;this.writes=[];this.changed=new Set()}
- async load(){
-  const sql=['SELECT revision FROM fp_business_revision WHERE id=1','SELECT key,value FROM settings',"SELECT * FROM records WHERE table_name IN ('equipment','maintenance_rules','staff','orders','scenarios')",'SELECT * FROM work_orders','SELECT * FROM inventory_stock','SELECT * FROM inventory_reservations','SELECT * FROM dataset_versions','SELECT * FROM alerts'];
-  const r=await this.db.batch(sql.map(x=>this.db.prepare(x)));
-  this.revision=r[0].results[0].revision;this.settings=Object.fromEntries(r[1].results.map(x=>[x.key,x.value]));this.data={};this.raw=r[2].results;
-  for(const x of this.raw)(this.data[x.table_name]??=[]).push({...JSON.parse(x.content),_index:x.row_index});
-  this.orders=r[3].results.map(x=>({...JSON.parse(x.content),work_order_id:x.work_order_id,equipment_id:x.equipment_id,status:x.status,updated_at:x.updated_at}));
-  this.stock=r[4].results;this.reservations=r[5].results;this.datasets=r[6].results;this.alerts=r[7].results;
+ async load(request,url,normalized=false){
+  const settingsQuery=this.db.prepare(`SELECT key,value FROM ${normalized?'business_settings':'settings'} WHERE key IN ('last_sync_at','inventory_scope','business_revision','source_name','data_origin')`);
+  let initial;
+  if(request.method==='GET')initial=await settingsQuery.all();
+  else{const baseline=await this.db.batch([settingsQuery,this.db.prepare('SELECT revision FROM fp_business_revision WHERE id=1')]);initial=baseline[0];this.revision=baseline[1].results[0].revision}
+  this.settings=Object.fromEntries(initial.results.map(x=>[x.key,x.value]));
   this.version=this.settings.last_sync_at;this.scope=this.settings.inventory_scope||this.version;this.businessRevision=this.settings.business_revision||'0';
-  if(!this.version)fail(503,'请先配置业务数据');return this;
+  if(!this.version)fail(503,'请先配置业务数据');
+  const path=url.pathname,get=request.method==='GET',flow=/^\/api\/work-orders\/([^/]+)\/flow$/.exec(path),op=/^\/api\/equipment\/([^/]+)\/operations$/.exec(path),resource=/^\/api\/resources\/(staff|orders|scenarios|requirements)$/.exec(path);
+  let tables=['equipment','maintenance_rules','staff','orders','scenarios'],orders=true,stock=true,reservations=true,datasets=true,alerts=true;
+  if(get){
+   tables=[];orders=false;stock=false;reservations=false;datasets=false;alerts=false;
+   if(path==='/api/work-orders'||flow)orders=true;
+   if(resource)tables=[resource[1]==='requirements'?'maintenance_rules':resource[1]];
+   if(path==='/api/resources/inventory'){stock=true;reservations=true}
+   if(path==='/api/maintenance/time-readiness')tables=['maintenance_rules','staff'];
+   if(path==='/api/maintenance/timeline'){tables=['equipment','staff','orders','scenarios'];orders=true;datasets=true}
+   if(op){tables=['orders'];orders=true}
+   if(path==='/api/operations/resource-occupancy'){tables=['staff','orders'];orders=true}
+  }else{
+   const raw=await request.clone().text();if(raw.length>65536)fail(413,'表单过长');try{this.payload=JSON.parse(raw)}catch{fail(422,'表单格式无效')}if(!this.payload||typeof this.payload!=='object'||Array.isArray(this.payload))fail(422,'表单格式无效');
+   datasets=false;alerts=path.startsWith('/api/alerts/');
+   const mutation=/^\/api\/resources\/(staff|orders|scenarios|requirements|inventory)\//.exec(path);
+   if(mutation){const kind=mutation[1];tables=kind==='inventory'?[]:[kind==='requirements'?'maintenance_rules':kind];if(['orders','requirements'].includes(kind))tables.push('equipment');orders=false;stock=['inventory','requirements'].includes(kind);reservations=false}
+   if(alerts){tables=[];stock=false;reservations=false;this.orderEquipment=decodeURIComponent(path.split('/')[3])}
+   if(path==='/api/maintenance-requests'){tables=['equipment'];stock=false;reservations=false;this.orderEquipment=this.payload.equipment_id}
+   const work=/^\/api\/work-orders\/([^/]+)\/(approval|transition|manage)$/.exec(path);
+   if(work){tables=[];this.targetOrder=decodeURIComponent(work[1]);this.workOperation=work[2];if(work[2]==='manage'||(work[2]==='transition'&&!['accept','start','verify','cancel'].includes(this.payload.action))){stock=false;reservations=false}}
+  }
+  const queries=[],labels=[];
+  const add=(name,sql,params=[])=>{labels.push(name);queries.push(this.db.prepare(sql).bind(...params))};
+  if(tables.length){let sql='SELECT * FROM records WHERE table_name IN ('+tables.map(()=>'?').join(',')+')',params=[...tables];if(op){sql+=" AND json_extract(content,'$.equipment_id')=?";params.push(decodeURIComponent(op[1]))}add('raw',sql,params)}
+  if(orders){
+   const filters=[],params=[];
+   if(flow){filters.push('work_order_id=?');params.push(decodeURIComponent(flow[1]))}
+   if(this.orderEquipment){filters.push('equipment_id=?');params.push(this.orderEquipment)}
+   if(this.targetOrder){
+    if(this.workOperation==='manage'){filters.push('equipment_id=(SELECT equipment_id FROM work_orders WHERE work_order_id=?)');params.push(this.targetOrder)}
+    else if(this.workOperation==='approval'||['accept','start'].includes(this.payload.action)){filters.push("(work_order_id=? OR status IN ('已批准','已接单','执行中','已暂停','待验收'))");params.push(this.targetOrder)}
+    else{filters.push('work_order_id=?');params.push(this.targetOrder)}
+   }
+   if(!get&&path==='/api/schedule/generate'){filters.push("json_extract(content,'$.deleted_at') IS NULL AND (status IN ('待审批','已批准','已接单','执行中','已暂停','待验收') OR (status='草稿·待排程' AND json_extract(content,'$.dataset_version')=?))");params.push(this.version)}
+   if(op){filters.push('equipment_id=?');params.push(decodeURIComponent(op[1]))}
+   if(get&&path==='/api/work-orders'){
+    if(url.searchParams.get('include_deleted')!=='true')filters.push("json_extract(content,'$.deleted_at') IS NULL");
+    for(const [parameter,column] of [['dataset_version',"json_extract(content,'$.dataset_version')"],['equipment_id','equipment_id'],['status','status']])if(url.searchParams.has(parameter)){filters.push(column+'=?');params.push(url.searchParams.get(parameter))}
+    const before=url.searchParams.get('before_updated_at'),beforeId=url.searchParams.get('before_id');
+    if(Boolean(before)!==Boolean(beforeId))fail(422,'翻页需要同时提供更新时间与工单编号');
+    if(before){filters.push('(updated_at<? OR (updated_at=? AND work_order_id<?))');params.push(before,before,beforeId)}
+   }
+   let sql='SELECT * FROM work_orders'+(filters.length?' WHERE '+filters.join(' AND '):'')+' ORDER BY updated_at DESC,work_order_id DESC';
+   if(get&&path==='/api/work-orders'&&url.searchParams.has('limit')){const limit=Number(url.searchParams.get('limit'));if(!Number.isInteger(limit)||limit<1||limit>1000)fail(422,'limit须在1到1000之间');sql+=' LIMIT ?';params.push(limit+1);this.pageLimit=limit}
+   add('orders',sql,params);
+  }
+  if(stock)add('stock','SELECT * FROM inventory_stock'+(get?' WHERE scope=?':''),get?[this.scope]:[]);
+  if(reservations)add('reservations',"SELECT * FROM inventory_reservations"+(get?" WHERE scope=? AND state='reserved'":""),get?[this.scope]:[]);
+  if(datasets)add('datasets','SELECT * FROM dataset_versions');
+  if(alerts)add('alerts','SELECT * FROM alerts WHERE dataset_version=? AND equipment_id=?',[this.version,this.orderEquipment]);
+  const values=queries.length?await this.db.batch(queries):[],loaded=Object.fromEntries(labels.map((name,i)=>[name,values[i].results]));
+  this.data={};this.raw=loaded.raw||[];
+  for(const x of this.raw)(this.data[x.table_name]??=[]).push({...JSON.parse(x.content),_index:x.row_index});
+  this.orders=(loaded.orders||[]).map(x=>({...JSON.parse(x.content),work_order_id:x.work_order_id,equipment_id:x.equipment_id,status:x.status,updated_at:x.updated_at}));
+  this.stock=loaded.stock||[];this.reservations=loaded.reservations||[];this.datasets=loaded.datasets||[];this.alerts=loaded.alerts||[];
+  return this;
  }
  write(sql,...params){this.writes.push(this.db.prepare(sql).bind(...params))}
  get(id){const o=this.orders.find(x=>x.work_order_id===id);if(!o)fail(404,'工单不存在');return o}
@@ -83,7 +138,9 @@ function place(s,c,limits,bookings,startAt,explicitTeam){
 async function route(request,s,url){
  const path=url.pathname,method=request.method;
  if(method==='GET'){
-  if(path==='/api/work-orders')return {records:s.orders.filter(x=>(url.searchParams.get('include_deleted')==='true'||!x.deleted_at)&&(!url.searchParams.has('dataset_version')||x.dataset_version===url.searchParams.get('dataset_version'))).sort((a,b)=>b.updated_at.localeCompare(a.updated_at))};
+  if(path==='/api/work-orders'){
+   const records=s.pageLimit?s.orders.slice(0,s.pageLimit):s.orders,last=records.at(-1);return {records,next_cursor:s.pageLimit&&s.orders.length>s.pageLimit?{updated_at:last.updated_at,work_order_id:last.work_order_id}:null};
+  }
   const flow=/^\/api\/work-orders\/([^/]+)\/flow$/.exec(path);
   if(flow){const o=s.get(decodeURIComponent(flow[1]));const events=await s.db.prepare('SELECT * FROM audit_events WHERE entity_id=? OR entity_id=? ORDER BY event_id').bind(o.work_order_id,o.source_alert_id||o.work_order_id).all();return {record:o,owner:['已批准','已接单','执行中','已暂停'].includes(o.status)?o.staff_name:'设备总管',next_step:o.deleted_at?'已移入回收站，可恢复':'按工单当前状态处理，操作留存审计',events:events.results.map(x=>({...x,content:JSON.parse(x.content)}))}}
   if(path==='/api/maintenance/timeline'){
@@ -99,7 +156,7 @@ async function route(request,s,url){
   return null;
  }
  if(method!=='POST')return null;
- const raw=await request.text();if(raw.length>65536)fail(413,'表单过长');let p;try{p=JSON.parse(raw)}catch{fail(422,'表单格式无效')}if(!p||typeof p!=='object'||Array.isArray(p))fail(422,'表单格式无效');
+ const p=s.payload;
  const transition=/^\/api\/work-orders\/([^/]+)\/transition$/.test(path);
  if(transition){if(!['developer','admin','user'].includes(s.user.role))fail(403,'只读账号不能处理工单')}else admin(s.user);
  const signature=stable({path,p:{...p,request_id:undefined},...actor(s.user)}),requestId=p.request_id||'auto-'+await hash(path==='/api/schedule/generate'?{signature,version:s.version,drafts:s.orders.filter(x=>!x.deleted_at&&x.status==='草稿·待排程').map(x=>[x.work_order_id,x.version]),business:s.businessRevision}:signature);
@@ -192,5 +249,5 @@ async function resources(s,path,p){
 export async function workOrders(request,env,user){
  const url=new URL(request.url);if(!/^\/api\/(?:work-orders(?:\/|$)|alerts\/[^/]+\/action$|maintenance-requests$|schedule\/generate$|maintenance\/(?:timeline|time-readiness)$|resources(?:\/|$)|equipment\/[^/]+\/operations$|operations\/resource-occupancy$)/.test(url.pathname))return null;
  if(request.method==='POST'&&!['developer','admin','user'].includes(user.role))return Response.json({detail:'只读账号不能修改工单或资源'},{status:403});
- try{const s=await new State(env.BUSINESS_DB,user).load();const body=await route(request,s,url);return body===null?Response.json({detail:'工单接口不存在'},{status:404}):Response.json(body,{headers:{'Cache-Control':'no-store'}})}catch(e){if(e instanceof Problem)return Response.json({detail:e.message},{status:e.status});throw e}
+ try{const s=await new State(env.BUSINESS_DB,user).load(request,url,String(env.BUSINESS_SCHEMA_VERSION)==='2');const body=await route(request,s,url);return body===null?Response.json({detail:'工单接口不存在'},{status:404}):Response.json(body,{headers:{'Cache-Control':'no-store'}})}catch(e){if(e instanceof Problem)return Response.json({detail:e.message},{status:e.status});throw e}
 }

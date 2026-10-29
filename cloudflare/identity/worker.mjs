@@ -50,23 +50,35 @@ function attempt(state,key){const previous=state.attempts.find(x=>x.attempt_key=
 function cookie(request){return request.headers.get('Cookie')?.split(';').map(x=>x.trim()).find(x=>x.startsWith(COOKIE+'='))?.slice(COOKIE.length+1)||''}
 const cookieHeader=(value,maxAge)=>`${COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${maxAge}`;
 async function principal(request,state,env){
- const value=cookie(request);if(!value)return null;const digest=await sha256(value);
+ const value=cookie(request);if(!value)return null;
+ if(value.startsWith('v2.')&&env?.IDENTITY_RUNTIME){const claims=await runtime(env,'session-open',{token:value});if(!claims)return null;return state?state.users.find(x=>String(x.user_id)===String(claims.user_id)&&x.active===1&&x.version===claims.version)||null:claims}
+ const digest=await sha256(value);
  let session;
  if(env?.IDENTITY_RUNTIME){const stored=await runtime(env,'lookup',{digest});if(stored.revoked)return null;session=stored.session}
- session=session||state.sessions.find(x=>x.token_hash===digest&&Date.parse(x.expires_at)>Date.now());
+ if(!state&&!env?.IDENTITY_RUNTIME)session=await env.DB.prepare('SELECT user_id,expires_at FROM auth_sessions WHERE token_hash=? AND expires_at>?').bind(digest,new Date().toISOString()).first();
+ session=session||state?.sessions.find(x=>x.token_hash===digest&&Date.parse(x.expires_at)>Date.now());
+ if(!state){if(!session)return null;const row=await env.DB.prepare('SELECT * FROM auth_users WHERE user_id=? AND active=1').bind(session.user_id).first();return row&&(session.version===undefined||session.version===row.version)?row:null}
  return session?state.users.find(x=>String(x.user_id)===String(session.user_id)&&x.active===1&&(session.version===undefined||session.version===x.version))||null:null;
 }
 function developer(user){if(!user||ROLE_CODES[user.role]!=='developer')fail(403,'此功能需要开发者权限')}
 const requireUser=user=>{if(!user)fail(401,'请先登录');return user};
 async function signIn(env,state,row,extra=[],attemptKey){
+ if(env.IDENTITY_RUNTIME){const user={user_id:row.user_id,display_name:row.display_name,role:row.role,staff_id:row.staff_id,version:row.version,active:1};const sealed=await runtime(env,'session-seal',{user,attempt_key:attemptKey});return [{success:true,user:userView(row)},cookieHeader(sealed.token,TTL)]}
  const raw=token(),expires=new Date(Date.now()+TTL*1000).toISOString();
- if(env.IDENTITY_RUNTIME){await runtime(env,'sign-in',{digest:await sha256(raw),session:{user_id:String(row.user_id),version:row.version,expires_at:expires},attempt_key:attemptKey});return [{success:true,user:userView(row)},cookieHeader(raw,TTL)]}
  await commit(env.DB,state,[['DELETE FROM auth_sessions WHERE expires_at<=?',[new Date().toISOString()]],['INSERT INTO auth_sessions VALUES (?,?,?)',[await sha256(raw),String(row.user_id),expires]],...extra]);
  return [{success:true,user:userView(row)},cookieHeader(raw,TTL)];
 }
 async function body(request){if(Number(request.headers.get('Content-Length')||0)>16384)fail(413,'输入内容过长');const text=await request.text();if(text.length>16384)fail(413,'输入内容过长');try{const value=JSON.parse(text||'{}');if(!value||typeof value!=='object'||Array.isArray(value))throw Error();return value}catch{fail(422,'请提交有效的表单数据')}}
 
 async function account(request,env,path){
+ if(path==='/api/auth/status'&&request.method==='GET'){
+  const user=await principal(request,null,env);
+  const progress=user?(env.IDENTITY_RUNTIME?await runtime(env,'progress',{user_id:String(user.user_id)}):await env.DB.prepare('SELECT step,completed_at FROM auth_onboarding WHERE user_id=?').bind(String(user.user_id)).first()):null;
+  const guest=!user&&env.GUEST_USER_ID?await env.DB.prepare("SELECT 1 AS present FROM auth_users WHERE user_id=? AND role='只读用户' AND active=1").bind(env.GUEST_USER_ID).first():null;
+  const exists=user||await env.DB.prepare('SELECT 1 AS present FROM auth_users LIMIT 1').first();
+  return [{required:true,setup_needed:!exists,mode:'accounts',identity_provider:'cloudflare_d1',guest_available:!!guest,user:user?userView(user):null,onboarding:user?{step:progress?.step||0,completed_at:progress?.completed_at||null,total_steps:5}:null}];
+ }
+ if(path==='/api/auth/logout'&&request.method==='POST'&&env.IDENTITY_RUNTIME){const raw=cookie(request);if(raw.startsWith('v2.'))await runtime(env,'revoke-token',{token:raw});else if(raw)await runtime(env,'logout',{digest:await sha256(raw)});return [{success:true},cookieHeader('',0)]}
  const state=await snapshot(env.DB),user=await principal(request,state,env),guest=env.GUEST_USER_ID&&state.users.find(x=>String(x.user_id)===env.GUEST_USER_ID&&x.role==='只读用户'&&x.active===1);
  if(path==='/api/auth/status'&&request.method==='GET'){
   let progress=user&&state.onboarding.find(x=>String(x.user_id)===String(user.user_id));
@@ -147,7 +159,7 @@ export default{async fetch(request,env){
  const url=new URL(request.url),origin=request.headers.get('Origin'),allowed=new Set((env.ALLOWED_ORIGINS||'https://observl.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://localhost:8000').split(',').map(x=>x.trim()).filter(Boolean));allowed.add(url.origin);
  const headers=new Headers({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':'Origin'});
  if(origin&&allowed.has(origin)){headers.set('Access-Control-Allow-Origin',origin);headers.set('Access-Control-Allow-Credentials','true')}
- headers.set('Access-Control-Expose-Headers','ETag,X-FP-Revisions,X-FP-Delta');
+ headers.set('Access-Control-Expose-Headers','ETag,X-FP-Revisions,X-FP-Delta,X-FP-Result-Cache');
  const json=(value,status=200,cookie)=>{const h=new Headers(headers);h.set('Content-Type','application/json; charset=utf-8');if(cookie)h.set('Set-Cookie',cookie);return new Response(JSON.stringify(value),{status,headers:h})};
  try{
   if(origin&&!allowed.has(origin))fail(403,'此来源不能访问账号服务');
@@ -156,9 +168,15 @@ export default{async fetch(request,env){
   if(url.pathname==='/api/health')return json({status:'ok',service:'factorypulse',identity_provider:'cloudflare_d1',business_configured:!!(env.BUSINESS_DB||env.BUSINESS_API_ORIGIN),business_provider:env.BUSINESS_DB?'cloudflare_d1':null,business_database_id:env.BUSINESS_DATABASE_ID||null,business_schema_configured:Number(env.BUSINESS_SCHEMA_VERSION||1)});
   if(!url.pathname.startsWith('/api/')&&env.ASSETS&&['GET','HEAD'].includes(request.method))return env.ASSETS.fetch(request);
   if(!env.DB)fail(503,'账号数据库尚未绑定');
-  if(url.pathname.startsWith('/api/auth/')){const [value,setCookie]=await account(request,env,url.pathname);return json(value,200,setCookie)}
+  if(url.pathname.startsWith('/api/auth/')){
+    const affected=request.method==='POST'&&(/^\/api\/auth\/users\/\d+$/.test(url.pathname)||['/api/auth/password','/api/auth/profile'].includes(url.pathname));
+    const actor=affected?await principal(request,null,env):null;
+    const [value,setCookie]=await account(request,env,url.pathname);
+    if(affected&&env.IDENTITY_RUNTIME){const id=url.pathname.match(/\/users\/(\d+)$/)?.[1]||String(actor.user_id);await runtime(env,'invalidate-user',{user_id:id})}
+    return json(value,200,setCookie);
+   }
   if(url.pathname.startsWith('/api/')){
-   const state=await snapshot(env.DB);const user=await principal(request,state,env);requireUser(user);
+   const user=await principal(request,null,env);requireUser(user);
    const ai=await dify(request,env,userView(user));if(ai){const out=new Headers(ai.headers);for(const [key,value] of headers)out.set(key,value);return new Response(ai.body,{status:ai.status,headers:out})}
    if(env.BUSINESS_DB){
     const response=await syncedRead(request,env,userView(user),async()=>{
@@ -178,3 +196,5 @@ export default{async fetch(request,env){
  }catch(error){if(error instanceof Failure)return json({detail:error.message},error.status);if(/daily.*(?:row )?read|free tier.*read/i.test(String(error)))return json({detail:'Cloudflare D1 今日免费读取额度已用尽；额度每日北京时间08:00重置，或升级 Cloudflare Workers 付费套餐后恢复。',code:'D1_READ_QUOTA_EXCEEDED'},503);if(/daily.*(?:write|written)|free tier.*write|7500/i.test(String(error)))return json({detail:'Cloudflare D1 今日写入额度不足，此项修改暂不可用。请等待额度恢复；账号密码未被修改。'},503);return json({detail:'账号中心暂时无法完成操作，请稍后重试。'},503)}
 }};
 export {IdentityRuntime} from './auth-runtime.mjs';
+
+export {BusinessResults} from './result-runtime.mjs';

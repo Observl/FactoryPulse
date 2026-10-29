@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {syncedRead,delta} from './data-sync.mjs';
+import {syncedRead,delta,dependencies} from './data-sync.mjs';
 let revision=1,calls=0,value={records:[{id:1,n:2},{id:2,n:3}],padding:'unchanged'.repeat(100)};
 const env={BUSINESS_DATABASE_ID:'fixture',BUSINESS_DB:{prepare(){return {async all(){return {results:[{resource:'records/equipment',revision},{resource:'__source__',revision:'v1'}]}}}}}};
 const user={user_id:'12345',version:1,role:'viewer'};
@@ -16,3 +16,15 @@ response=await syncedRead(request('/api/data/revisions',{'If-None-Match':tag}),e
 assert.deepEqual(delta([1,2,3],[1]),[{op:'remove',path:[2]},{op:'remove',path:[1]}]);
 response=await syncedRead(request('/api/records/equipment'),env,user,async()=>{revision++;return Response.json(value)});assert.equal(response.headers.get('ETag'),null);
 console.log('Workers sync passed: conditional reads, deltas, deletions, identity isolation, concurrent changes');
+// A database schema switch changes the response contract even without row writes.
+const schema1=await syncedRead(request('/api/resources/inventory'),{...env,BUSINESS_SCHEMA_VERSION:'1'},user,handler);
+const schema2=await syncedRead(request('/api/resources/inventory',{'If-None-Match':schema1.headers.get('ETag')}),{...env,BUSINESS_SCHEMA_VERSION:'2'},user,handler);
+assert.equal(schema2.status,200);
+assert.notEqual(schema1.headers.get('ETag'),schema2.headers.get('ETag'));
+console.log('Schema switch invalidates stored response generations');
+
+assert.ok(!dependencies('/api/equipment/E1/operations').includes('records/readings'));
+assert.ok(!dependencies('/api/maintenance/timeline').includes('records/readings'));
+assert.ok(dependencies('/api/resources/requirements').includes('inventory_stock'));
+assert.ok(dependencies('/api/overview').includes('records/staff'));
+console.log('Resource dependencies avoid unrelated invalidations while retaining inventory and staff changes.');

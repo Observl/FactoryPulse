@@ -21,12 +21,10 @@ export const AgentHarnessPanel=forwardRef<HarnessHandle,{onReady?:(ready:boolean
   let id=sid;
   if(!id){const session=await apiRequest("/copilot/sessions",{method:"POST",signal,headers:{"Content-Type":"application/json"},body:JSON.stringify({task,success_criteria:criteria,tools:selected})});id=session.session_id;setSid(id);setResume(id)}
   setProgress({current_limit_seconds:timeConfig.initial,useful_progress_count:0});
-  let polling=true;
-  const poll=window.setInterval(()=>{void apiRequest(`/copilot/sessions/${id}`).then(data=>{const run=data.runs?.[0];if(polling&&run?.status==="running"&&run.budget)setProgress(run.budget)}).catch(()=>{})},2000);
   try{
    const data=await apiRequest(`/copilot/sessions/${id}/chat`,{method:"POST",signal,headers:{"Content-Type":"application/json"},body:JSON.stringify({question})},timeConfig.networkTimeout);
    await refresh(id);return data;
-  }finally{polling=false;window.clearInterval(poll);setProgress(null)}
+  }finally{setProgress(null)}
  }}));
  const act=async(operation:()=>Promise<unknown>)=>{setBusy(true);setError("");try{await operation()}catch(e){setError(errorMessage(e))}finally{setBusy(false)}};
  const decide=(p:Permission,decision:"approve"|"reject")=>act(async()=>{await apiRequest(`/copilot/sessions/${sid}/permissions/${p.permission_id}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision,digest:p.digest,reason:reasons[p.permission_id]})});await refresh(sid);setAck("");setReasons(old=>({...old,[p.permission_id]:""}));window.dispatchEvent(new CustomEvent("factorypulse:agent-write"))});

@@ -6,13 +6,41 @@ export class IdentityRuntime {
   const json=(value,status=200)=>Response.json(value,{status});
   if(op==='/dify-config-get')return json(await this.ctx.storage.get('dify-config:'+p.user_id)||null);
   if(op==='/dify-config-set')return this.ctx.storage.transaction(async tx=>{const old=await tx.get('dify-config:'+p.user_id);if(p.version!==(old?.version||0))return json({detail:'配置已更新，请重新加载。'},409);const value={api_key:p.api_key||old?.api_key||'',input_field:p.input_field,output_field:p.output_field,version:(old?.version||0)+1};await tx.put('dify-config:'+p.user_id,value);return json({success:true,version:value.version})});
+  // The browser stores only an authenticated AES-GCM envelope in an HttpOnly cookie.
+  if(op==='/session-seal'||op==='/session-open'){
+   const raw=await this.ctx.storage.transaction(async tx=>{let value=await tx.get('session-encryption-key');if(!value){value=Array.from(crypto.getRandomValues(new Uint8Array(32)));await tx.put('session-encryption-key',value)}return value});
+   const key=await crypto.subtle.importKey('raw',new Uint8Array(raw),'AES-GCM',false,['encrypt','decrypt']);
+   const encode=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+   const decode=value=>Uint8Array.from(atob(value.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+   if(op==='/session-seal'){
+    if(p.attempt_key)await this.ctx.storage.delete('attempt:'+p.attempt_key);
+    const iv=crypto.getRandomValues(new Uint8Array(12)),generation=await this.ctx.storage.get('user-generation:'+p.user.user_id)||0;
+    const claims={user:p.user,expires_at:now+8*3600000,generation,nonce:crypto.randomUUID()};
+    const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(claims)));
+    return json({token:'v2.'+encode(iv)+'.'+encode(encrypted)});
+   }
+   try{
+    const [version,iv,data]=p.token.split('.');if(version!=='v2')return json(null);
+    if(await this.ctx.storage.get('revoked-token:'+p.token))return json(null);
+    const claims=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:decode(iv)},key,decode(data))));
+    const generation=await this.ctx.storage.get('user-generation:'+claims.user.user_id)||0;
+    return json(claims.expires_at>now&&claims.generation===generation?claims.user:null);
+   }catch{return json(null)}
+  }
+  if(op==='/invalidate-user'){
+   await this.ctx.storage.transaction(async tx=>{const key='user-generation:'+p.user_id;await tx.put(key,(await tx.get(key)||0)+1)});
+   return json({success:true});
+  }
+  if(op==='/revoke-token'){
+   await this.ctx.storage.put('revoked-token:'+p.token,{expires_at:new Date(now+8*3600000).toISOString()});
+   return json({success:true});
+  }
   if(op==='/lookup'){
    if(await this.ctx.storage.get('revoked:'+p.digest))return json({revoked:true});
    const session=await this.ctx.storage.get('session:'+p.digest);
    return json({session:session&&Date.parse(session.expires_at)>now?session:null});
   }
   if(op==='/attempt'){
-   if(await this.ctx.storage.getAlarm()===null)await this.ctx.storage.setAlarm(now+6*3600000);
    return this.ctx.storage.transaction(async tx=>{
     const stored=await tx.get('attempt:'+p.key),legacy=p.previous;
     const candidates=[stored,legacy].filter(x=>x&&Date.parse(x.window_start)>now-600000);
@@ -43,13 +71,7 @@ export class IdentityRuntime {
     await tx.put('progress:'+p.user_id,value);return json(value);
    });
   }else{return json({detail:'Not found'},404)}
-  if(await this.ctx.storage.getAlarm()===null)await this.ctx.storage.setAlarm(now+6*3600000);
   return json({success:true});
  }
- async alarm(){
-  const now=Date.now(),rows=await this.ctx.storage.list(),expired=[];
-  for(const [key,value] of rows)if(value.expires_at&&Date.parse(value.expires_at)<=now)expired.push(key);
-  for(let start=0;start<expired.length;start+=100)await this.ctx.storage.delete(expired.slice(start,start+100));
-  if([...rows.keys()].some(key=>!key.startsWith('progress:')&&!expired.includes(key)))await this.ctx.storage.setAlarm(now+6*3600000);
- }
+ async alarm(){/* Older deployments may leave an alarm; do not reschedule or scan storage. */}
 }

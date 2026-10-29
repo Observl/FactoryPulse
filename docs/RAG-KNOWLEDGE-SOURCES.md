@@ -11,8 +11,8 @@
 | 优先级 | 文件 | 问答用途 | 入库条件 |
 | --- | --- | --- | --- |
 | P0 | README.md | 功能、角色、当前架构与验证边界 | 记录提交版本 |
-| P0 | [docs/AGENT-DATABASE-GUIDE.md](AGENT-DATABASE-GUIDE.md) | V2 事实表、动态视图、迁移状态与字段清理规则 | V2 尚未上线，不能用于当前 V1 库生成 SQL |
-| P0 | [docs/AGENT-DATABASE-GUIDE-V1.md](AGENT-DATABASE-GUIDE-V1.md) | 现有 V1 业务库结构和查询方式 | 与 V2 按结构版本隔离检索，直到所有读写方完成切换 |
+| P0 | [docs/AGENT-DATABASE-GUIDE.md](AGENT-DATABASE-GUIDE.md) | 线上 V2 事实表、动态视图、字段及 SQL 规则 | 2026-10-27 已上线；业务库 UUID 不变，作为当前数据库查询依据 |
+| 历史 | [docs/AGENT-DATABASE-GUIDE-V1.md](AGENT-DATABASE-GUIDE-V1.md) | V1 历史结构与兼容接口维护参考 | 不加入当前 Agent SQL 检索结果，避免混用结构 |
 | P0 | docs/AGENT-HARNESS.md | 工具、授权、会话、重试、证据与写入边界 | 与当前注册表核对 |
 | P0 | docs/SCORING-AND-SCHEDULING.md | 模型分数、解释、资源约束与排程 | 保留适用边界 |
 | P0 | docs/ACCOUNT-SCHEMA.md | 角色与账号规则 | 仅面向有权访问者；不导入实际账号记录 |

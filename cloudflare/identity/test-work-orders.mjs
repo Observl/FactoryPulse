@@ -56,6 +56,14 @@ try{
  await call('/resources/staff/2',{staff_name:'Invalid',skills:['mechanic'],available_hours:12,shift_start:at(0),shift_end:at(1)},admin,422);
  await call('/resources/inventory/part',{on_hand:3,version:2,note:'stock recount'});assert.equal((await call('/resources/inventory')).records[0].on_hand,3);
  await call('/maintenance/timeline');await call('/maintenance/time-readiness');await call('/operations/resource-occupancy');await call('/equipment/E1/operations');
+ // A read must not load unrelated business tables.
+ const reads=[];const scopedDB={prepare(sql){reads.push(sql);return db.prepare(sql)},batch(statements){return db.batch(statements)}};
+ await workOrders(new Request('https://test/api/resources/staff'),{BUSINESS_DB:scopedDB},admin);
+ assert.ok(reads.some(sql=>sql.includes('FROM records')));
+ assert.ok(!reads.some(sql=>/FROM (work_orders|alerts|inventory_stock|inventory_reservations|dataset_versions)/.test(sql)));
+ reads.length=0;await workOrders(new Request('https://test/api/work-orders/'+id+'/flow'),{BUSINESS_DB:scopedDB},admin);
+ assert.ok(reads.some(sql=>sql.includes('work_order_id=?')));assert.ok(!reads.some(sql=>sql.includes('FROM records')));
+ const page=await workOrders(new Request('https://test/api/work-orders?limit=1'),env,admin);const paged=await page.json();assert.ok(paged.records.length<=1);
  // Two writes that read the same revision cannot both commit.
  const req=id=>new Request('https://test.invalid/api/maintenance-requests',{method:'POST',body:JSON.stringify({equipment_id:'E2',action:'concurrent request',request_id:id})});
  const races=await Promise.all([workOrders(req('concurrent-01'),env,admin),workOrders(req('concurrent-02'),env,admin)]);assert.deepEqual(races.map(x=>x.status).sort(),[200,409]);checks++;

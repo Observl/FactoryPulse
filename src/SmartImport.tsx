@@ -1,7 +1,8 @@
+import {useApiUpdate} from "./useCachedData";
 import {Button,FileButton} from "./components/Button";
 import {useAuth} from "./Auth";
 import {apiRequest,errorMessage} from "./api";
-import {useEffect,useState} from "react";
+import {useState} from "react";
 import {Upload} from "lucide-react";
 import {ImportProfiles,type FieldProfile,type DeviceFieldProfile} from "./ImportProfiles";
 type Mapping={source_column:string;target_field:string;custom_target:string;confidence:number;reason:string;samples:unknown[];source_unit?:string;custom_unit?:string;use_for_prediction?:boolean};
@@ -17,8 +18,8 @@ export function SmartImport({onImported,onOpenRisk}:{onImported:()=>Promise<unkn
  const [importResult,setImportResult]=useState<ImportResult|null>(null),[reviewed,setReviewed]=useState<string[]>([]);
  const [profileId,setProfileId]=useState("generic"),[deviceProfiles,setDeviceProfiles]=useState<DeviceFieldProfile[]>([]);
  const [analysis,setAnalysis]=useState<Analysis|null>(null),[job,setJob]=useState<Job|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState(""),[unitsConfirmed,setUnitsConfirmed]=useState(false),[replaceConfirmed,setReplaceConfirmed]=useState(false),[defaultId,setDefaultId]=useState("");
+ useApiUpdate([/^\/import\/jobs\//],(path,body)=>{if(job&&path===`/import/jobs/${job.job_id}`)setJob(body)});
  const running=!!job&&["queued","validating"].includes(job.status);
- useEffect(()=>{if(!job?.job_id||!["queued","validating"].includes(job.status))return;let active=true;const poll=async()=>{try{const next=await call(`/import/jobs/${job.job_id}`);if(active){setJob(next);setError("")}}catch(reason){if(active)setError("读取校验进度失败，任务可能仍在运行："+errorMessage(reason))}};const timer=window.setInterval(()=>void poll(),1500);void poll();return()=>{active=false;window.clearInterval(timer)}},[job?.job_id,job?.status]);
  const analyze=async(file:File)=>{setBusy(true);setError("");setImportResult(null);setReviewed([]);setMessage("仅分析表头与第一条数据…");setJob(null);setUnitsConfirmed(false);setReplaceConfirmed(false);try{const form=new FormData();form.append("file",file);const result=await call("/import/intelligent/analyze",{method:"POST",body:form});setAnalysis(result);setProfileId("generic");setDeviceProfiles([]);setMessage("字段已识别，请核对设备、时间和单位。")}catch(reason){setError(errorMessage(reason))}finally{setBusy(false)}};
  const inspectDatabase=async(file:File)=>{setBusy(true);setError("");setDatabase(null);setAnalysis(null);setJob(null);setImportResult(null);setMessage("");try{const form=new FormData();form.append("file",file);const result=await call("/import/database/inspect",{method:"POST",body:form});setDatabase(result);setSelectedTable(result.tables[0]||"")}catch(reason){setError(errorMessage(reason))}finally{setBusy(false)}};
  const analyzeDatabase=async()=>{if(!database)return;setBusy(true);setError("");setReviewed([]);setUnitsConfirmed(false);setReplaceConfirmed(false);setJob(null);try{const result=await call("/import/database/analyze",body({upload_id:database.upload_id,table:selectedTable}));setAnalysis(result);setProfileId("generic");setDeviceProfiles([]);setMessage("数据表已读取，请核对字段和单位后预览。")}catch(reason){setError(errorMessage(reason))}finally{setBusy(false)}};

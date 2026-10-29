@@ -37,7 +37,7 @@ export function EquipmentManager({focusedAlert="",focusedWorkOrder="",devices,da
  const alertRequest=useRef({signature:"",id:""});
  const versionRef=useRef(dataVersion);versionRef.current=dataVersion;
  const load=async()=>{const requestedVersion=dataVersion;const [w,a]=await Promise.all([request("/work-orders"),request("/alerts")]);if(versionRef.current!==requestedVersion)return;setOrders(w.records||[]);setHandled(a.records||[]);setLoaded(true)};
- useEffect(()=>{if(!dataReady)return;let active=true;setLoaded(false);setOrderFilter("未关闭");setOrderQuery("");setReview(null);setApproval(null);setConflicts([]);const refresh=()=>load().catch(e=>{if(active)setError("工作台数据加载失败："+errorMessage(e))});void refresh();const timer=window.setInterval(()=>{if(active)void refresh()},30000);return()=>{active=false;window.clearInterval(timer)}},[dataReady,dataVersion]);
+ useEffect(()=>{if(!dataReady)return;let active=true;setLoaded(false);setOrderFilter("未关闭");setOrderQuery("");setReview(null);setApproval(null);setConflicts([]);const refresh=()=>load().catch(e=>{if(active)setError("工作台数据加载失败："+errorMessage(e))});void refresh();return()=>{active=false;}},[dataReady,dataVersion]);
  useEffect(()=>{if(focusedWorkOrder&&loaded){setArea("工单处理");setBoardFocus(focusedWorkOrder);setOrderFilter("全部");setOrderQuery(focusedWorkOrder)}},[focusedWorkOrder,loaded]);
  const refreshAfterWrite=async(includeOverview=false)=>{
   const results=await Promise.allSettled(includeOverview?[onChanged(),load()]:[load()]);

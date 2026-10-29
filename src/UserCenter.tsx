@@ -1,3 +1,4 @@
+import {useApiUpdate} from "./useCachedData";
 import {Button} from "./components/Button";
 import {ProfileSettings} from "./ProfileSettings";
 import {DeviceIndicator} from "./DeviceIndicator";
@@ -12,7 +13,8 @@ import {personalTasks,type TaskDevice,type TaskOrder,type TaskAlert,type Operati
 export function UserCenter({devices,dataReady,dataVersion,onOpenOrder,onReviewAlert,onNavigate,tasksPage=false}:{onNavigate:(page:string)=>void;tasksPage?:boolean;devices:TaskDevice[];dataReady:boolean;dataVersion:string;onOpenOrder:(id:string)=>void;onReviewAlert:(id:string)=>void}){
  const auth=useAuth(),user=auth.user;
  const [revision,setRevision]=useState(0),[orders,setOrders]=useState<TaskOrder[]>([]),[alerts,setAlerts]=useState<TaskAlert[]>([]),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[filter,setFilter]=useState('全部'),[query,setQuery]=useState(''),[page,setPage]=useState(1),[now,setNow]=useState(Date.now());
- useEffect(()=>{let active=true,running=false;setLoaded(false);setError('');const load=async()=>{if(running)return;running=true;try{const [work,decisions]=await Promise.all([apiRequest('/work-orders'),apiRequest('/alerts')]);if(active){setOrders(work.records||[]);setAlerts(decisions.records||[]);setLoaded(true);setError('');setNow(Date.now())}}catch(reason){if(active)setError(errorMessage(reason))}finally{running=false}};void load();const timer=setInterval(()=>void load(),30000);return()=>{active=false;clearInterval(timer)}},[dataVersion,user?.user_id,revision]);
+ useEffect(()=>{let active=true,running=false;setLoaded(false);setError('');const load=async()=>{if(running)return;running=true;try{const [work,decisions]=await Promise.all([apiRequest('/work-orders'),apiRequest('/alerts')]);if(active){setOrders(work.records||[]);setAlerts(decisions.records||[]);setLoaded(true);setError('');setNow(Date.now())}}catch(reason){if(active)setError(errorMessage(reason))}finally{running=false}};void load();return()=>{active=false;}},[dataVersion,user?.user_id,revision]);
+ useApiUpdate(["/work-orders","/alerts"],(path,body)=>{if(path==="/work-orders")setOrders(body.records||[]);else setAlerts(body.records||[]);setNow(Date.now());setError("")});
  const logout=async()=>{if(!confirmUnsavedNavigation())return;setBusy(true);setError('');try{await auth.logout()}catch(reason){setError(errorMessage(reason))}finally{setBusy(false)}};
  if(!user)return null;
  const tasks=personalTasks(dataReady?devices:[],orders,alerts,dataVersion,now,user);

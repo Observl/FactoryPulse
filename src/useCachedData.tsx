@@ -1,3 +1,4 @@
+import {Button} from './components/Button';
 import {useEffect,useRef,useSyncExternalStore} from 'react';
 import {processedCache} from './data-cache';
 export function useApiUpdate(paths:(string|RegExp)[],onUpdate:(path:string,data:any)=>void){
@@ -7,5 +8,5 @@ export function useApiUpdate(paths:(string|RegExp)[],onUpdate:(path:string,data:
 export function DataCacheStatus(){
  const status=useSyncExternalStore(processedCache.subscribeStatus,processedCache.getStatus);
  if(!status.enabled)return null;
- return <span className="data-cache-status" role="status" title={status.error||`已缓存 ${status.entries} 项结果；每 5 秒检查线上版本，只刷新变更数据。`}>{status.error?'缓存可用 · 更新检查失败':status.checking?'检查更新中':status.lastChecked?'缓存已同步':'本地缓存就绪'}</span>;
+ return <><Button className="secondary" disabled={status.checking} onClick={()=>void processedCache.check()}>{status.checking?"正在更新…":"更新数据"}</Button><span className="data-cache-status" role="status" title={status.error||`已缓存 ${status.entries} 项结果；仅点击更新数据时检查线上版本，未变更时保留本地 JSON。`}>{status.error?'缓存可用 · 更新检查失败':status.checking?'检查更新中':status.lastChecked?'缓存已同步':'本地缓存就绪'}</span></>;
 }

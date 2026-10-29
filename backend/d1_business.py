@@ -85,7 +85,7 @@ class Connection:
         if keyword in {'ATTACH','DETACH'}:raise HTTPException(422,'云端数据库模式不支持本地数据库附件')
         if re.match(r'PRAGMA\s+user_version',text,re.I):
             if '=' in text:
-                version=int(text.split('=')[1]);self.query("INSERT INTO fp_db_metadata VALUES('user_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[str(version)]);return Cursor()
+                version=int(text.split('=')[1]);table='database_metadata' if self.schema_v2 else 'fp_db_metadata';self.query(f"INSERT INTO {table} VALUES('user_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[str(version)]);return Cursor()
             rows=self.query("SELECT CAST(value AS INTEGER) AS user_version FROM fp_db_metadata WHERE key='user_version'")
             return Cursor(rows if rows['results'] else {'results':[{'user_version':0}]})
         if keyword in {'CREATE','ALTER','DROP'}:

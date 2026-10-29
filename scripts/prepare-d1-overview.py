@@ -46,5 +46,5 @@ for device in tables['equipment']:
     identifier=device['equipment_id']
     views['history/'+identifier]=app.equipment_history(identifier,360)
 for key,value in views.items():
-    store.batch([{'sql':'INSERT INTO fp_computed_views VALUES(?,?,?) ON CONFLICT(dataset_id,view_key) DO UPDATE SET content=excluded.content','params':[version,key,json.dumps(value,ensure_ascii=False,default=str,separators=(',',':'))]}])
+    store.batch([{'sql':'INSERT OR REPLACE INTO fp_computed_views VALUES(?,?,?)','params':[version,key,json.dumps(value,ensure_ascii=False,default=str,separators=(',',':'))]}])
 print(json.dumps({'published_views':len(views),'devices':overview['metrics']['total'],'model_status':overview['analytics']['xgboost'],'counts':overview['counts']},ensure_ascii=False),flush=True)

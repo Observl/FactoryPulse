@@ -14,7 +14,7 @@ const sections=[{page:'工作台',label:'工作台',Icon:LayoutDashboard},{page:
 const group=(page:string)=>['异常解释'].includes(page)?'风险预测':['维护计划','维护策略'].includes(page)?'执行审批':page;
 export function WorkspaceNavigation({page,onNavigate,devices,dataVersion,sourceName,dataReady=true,ordersSnapshot,onOpenDevice,onOpenOrder}:{ordersSnapshot?:Order[];dataReady?:boolean;page:string;onNavigate:(page:string)=>void;devices:Device[];dataVersion:string;sourceName:string;onOpenDevice:(id:string)=>void;onOpenOrder:(id:string)=>void}){
  const auth=useAuth();const [orders,setOrders]=useState<Order[]|null>(()=>ordersSnapshot||processedCache.peek("/work-orders")?.records||null),[treeOpen,setTreeOpen]=useState(false),[openLines,setOpenLines]=useState<Record<string,boolean>>({});
- useEffect(()=>{if(ordersSnapshot){setOrders(ordersSnapshot);return}let active=true;const load=()=>apiRequest('/work-orders').then(r=>{if(active)setOrders(r.records||[])}).catch(()=>{if(active)setOrders(null)});void load();const timer=window.setInterval(load,30000);return()=>{active=false;window.clearInterval(timer)}},[dataVersion,ordersSnapshot]);
+ useEffect(()=>{if(ordersSnapshot){setOrders(ordersSnapshot);return}let active=true;const load=()=>apiRequest('/work-orders').then(r=>{if(active)setOrders(r.records||[])}).catch(()=>{if(active)setOrders(null)});void load();return()=>{active=false;}},[dataVersion,ordersSnapshot]);
  useApiUpdate(["/work-orders"],(_path,body)=>{if(!ordersSnapshot)setOrders(body.records)});
  const current=(orders||[]).filter(o=>(o as Order&{dataset_version?:string}).dataset_version===dataVersion);
  const lines=[...new Set(devices.map(d=>d.production_line||'未分配产线'))].sort();

@@ -27,6 +27,8 @@ try{
  await cache.authorize('user-A:1:viewer');
  const work=await cache.request('/work-orders',{},load),alerts=await cache.request('/alerts',{},load);
  await cache.check(true);requests=[];
+ await cache.afterWrite();assert.deepEqual(requests,[],'writes must not trigger reads');
+ await new Promise(resolve=>setTimeout(resolve,20));assert.deepEqual(requests,[],'idle cache must not poll');
  assert.equal(await cache.request('/work-orders',{},load),work);assert.equal(requests.length,0,'unchanged navigation must reuse the exact cached result');
  resources={work_orders:1,alerts:0};revisionTag++;
  responses['/work-orders']={status:200,data:{format:'fp-delta-v1',base:'"w0"',patch:[{op:'set',path:['records',0,'status'],value:'approved'}]},delta:true,etag:'"w1"',revisions:{work_orders:1}};
@@ -39,3 +41,31 @@ try{
  await cache.clear();assert.equal(cache.getStatus().enabled,false);
  console.log('Cache checks passed: navigation reuse, 304, targeted delta, stable unchanged records, deletion, offline retention, account isolation and logout clearing.');
 }finally{await cache.clear()}
+
+// Returning users hydrate persisted JSON without a request, even after several days.
+const disk=new Map([['persisted-user|/overview',{scope:'persisted-user',entry:{path:'/overview',data:{devices:[{equipment_id:'cached'}]},saved:Date.now()-7*86400000}}]]);
+globalThis.indexedDB={open(){const request={result:{transaction(){const tx={objectStore(){return {getAll(){const r={};queueMicrotask(()=>{r.result=[...disk.values()];r.onsuccess?.()});return r},put(value){disk.set(value.key,value);queueMicrotask(()=>tx.oncomplete?.())},clear(){disk.clear();queueMicrotask(()=>tx.oncomplete?.())}}}};return tx}}};queueMicrotask(()=>request.onsuccess?.());return request}};
+const persisted=new ProcessedCache();await persisted.authorize('persisted-user');
+let persistedReads=0;
+assert.equal((await persisted.request('/overview',{},async()=>{persistedReads++;throw Error('must remain offline')})).devices[0].equipment_id,'cached');
+assert.equal(persistedReads,0);
+let initialReads=0;const cold=new ProcessedCache();await cold.authorize('new-user');
+const initialLoader=async()=>{initialReads++;return {status:200,data:{records:[1]}}};
+await cold.request('/resources/staff',{},initialLoader);await cold.request('/resources/staff',{},initialLoader);
+assert.equal(initialReads,1,'an uncached resource loads once and then stays local, including JSON without an ETag');
+// Old releases persisted Dify readiness and optimistic versions. Reloading must
+// discard those snapshots and saving must be followed by a fresh server read.
+disk.set('dify-user|/copilot/dify/config',{scope:'dify-user',entry:{path:'/copilot/dify/config',data:{ready:false,version:0},saved:1}});
+disk.set('dify-user|/copilot/dify/status',{scope:'dify-user',entry:{path:'/copilot/dify/status',data:{ready:false},saved:1}});
+const difyCache=new ProcessedCache();await difyCache.authorize('dify-user');
+assert.equal(difyCache.peek('/copilot/dify/config'),undefined);
+assert.equal(difyCache.peek('/copilot/dify/status'),undefined);
+let configVersion=0,difyReads=0;
+const difyLoader=async()=>{difyReads++;return {status:200,data:{ready:configVersion>0,version:configVersion}}};
+assert.equal((await difyCache.request('/copilot/dify/config',{},difyLoader)).ready,false);
+configVersion=1;await difyCache.afterWrite();
+assert.deepEqual(await difyCache.request('/copilot/dify/config',{},difyLoader),{ready:true,version:1});
+assert.equal((await difyCache.request('/copilot/dify/status',{},difyLoader)).ready,true);
+assert.equal(difyReads,3);assert.equal(difyCache.peek('/copilot/dify/config'),undefined);
+console.log('Dify cache regression passed: stale persisted settings excluded, saved version and readiness read fresh.');
+console.log('Persistent JSON checks passed: week-old offline cache and first-visit-only loading.');

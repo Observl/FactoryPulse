@@ -1,11 +1,8 @@
 // Authenticated, parameterized SQL reports. The caller authenticates every request.
-const qualitySQL=`SELECT *,CASE WHEN reading_count=0 THEN '没有可用采样，无法完成质量判断'
-WHEN missing_rate<0.05 AND duplicate_readings=0 AND invalid_timestamps=0 AND abnormal_values=0 AND future_timestamps=0
-THEN '基础校验通过，需核对现场适用性' ELSE '需补充或修复数据' END AS quality_status,
-CASE WHEN future_timestamps>0 THEN 'future_timestamp' WHEN data_age_hours>24 THEN 'historical' ELSE 'recent_or_unknown' END AS freshness FROM v_quality_report`;
+import {qualityQuery} from './quality-query.mjs';
+import {businessStatistics} from './statistics.mjs';
 const json=(value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
 const rows=async(db,sql,params=[])=>(await db.prepare(sql).bind(...params).all()).results;
-const fields=async db=>[...new Set((await rows(db,"SELECT DISTINCT json_extract(attributes,'$._feature_fields') AS fields FROM sensor_readings")).flatMap(x=>x.fields?JSON.parse(x.fields):[]))];
 const timestamp=value=>{if(!value)return null;const t=Date.parse(/[Zz]|[+-]\d{2}:\d{2}$/.test(value)?value:value.replace(' ','T')+'+08:00');if(!Number.isFinite(t))throw new Error('请输入有效时间');return new Date(t).toISOString()};
 
 export async function sqlRead(request,env,user){
@@ -14,22 +11,25 @@ export async function sqlRead(request,env,user){
  if(!db||!(['/api/data-quality','/api/data/summary','/api/overview','/api/resources/inventory'].includes(path)||path.startsWith('/api/analysis/')))return null;
  try{
   if(path==='/api/data-quality'){
-   const value=await db.prepare(qualitySQL).first();
-   return json({...value,field_coverage:await fields(db),sampling_gaps:await rows(db,'SELECT * FROM v_sampling_interruptions ORDER BY equipment_id,start_at LIMIT 100'),
-    missing_rate_scope:'指标值缺失率；主键和时间有效性单独检查',gap_method:'SQL 按设备正采样间隔中位数推断，超过3倍标为待复核间断；不是采集SLA',computed_by:'cloudflare_d1_sql'});
+   const packed=await db.prepare(qualityQuery).first(),value=JSON.parse(packed.report);
+   const fieldCoverage=[...new Set(JSON.parse(packed.fields).flatMap(x=>x?JSON.parse(x):[]))];
+   const quality_status=value.reading_count===0?'没有可用采样，无法完成质量判断':value.missing_rate!==null&&value.missing_rate<0.05&&value.duplicate_readings===0&&value.invalid_timestamps===0&&value.abnormal_values===0&&value.future_timestamps===0?'基础校验通过，需核对现场适用性':'需补充或修复数据';
+   return json({...value,quality_status,freshness:value.future_timestamps>0?'future_timestamp':value.data_age_hours>24?'historical':'recent_or_unknown',field_coverage:fieldCoverage,equipment_quality:JSON.parse(packed.equipment_quality),metric_statistics:JSON.parse(packed.metric_statistics),sampling_baselines:JSON.parse(packed.sampling_baselines),sampling_gaps:JSON.parse(packed.gaps),
+    missing_rate_scope:'指标值缺失率；主键和时间有效性单独检查',gap_method:'SQL 按设备正采样间隔中位数推断，超过3倍标为待复核间断；不是采集SLA',computed_by:'cloudflare_d1_sql',computed_at:new Date().toISOString()});
   }
-  if(path==='/api/data/summary')return json(await db.prepare('SELECT * FROM fp_v_data_source').first());
+  if(path==='/api/data/summary')return json((await businessStatistics(env)).source);
   if(path==='/api/resources/inventory')return json({records:await rows(db,'SELECT *,MAX(0,-balance_after_reservations) AS shortfall FROM v_current_spare_part_availability ORDER BY part_name'),meaning:'SQL：实盘库存扣除有效预留'});
   if(path==='/api/overview'){
    const limit=Number(p.get('limit')||500);if(!Number.isInteger(limit)||limit<1||limit>2000)return json({detail:'limit须在1到2000之间'},400);
    const artifact=await db.prepare("SELECT content FROM fp_v_processed_results WHERE view_key='overview'").first();
    const base=artifact?JSON.parse(artifact.content):{};
-   const devices=await rows(db,'SELECT content FROM v_dashboard_devices ORDER BY equipment_id LIMIT ?',[limit]);
-   const counts=Object.fromEntries((await rows(db,'SELECT table_name,record_count FROM fp_v_record_counts')).map(r=>[r.table_name,r.record_count]));
-   const metrics=await db.prepare('SELECT COUNT(*) AS total,SUM(score>0.35) AS high,SUM(score>=0.15 AND score<=0.35) AS warning,SUM(score IS NULL) AS unknown,ROUND(AVG(score),3) AS avg_risk FROM v_dashboard_devices').first();
-   const top=await rows(db,'SELECT content FROM v_dashboard_devices ORDER BY score IS NULL,score DESC,equipment_id LIMIT 100');
-   const source=await db.prepare('SELECT * FROM fp_v_data_source').first();
-   return json({...base,devices:devices.map(r=>JSON.parse(r.content)),top_risk_devices:top.map(r=>JSON.parse(r.content)),counts,metrics,
+   const all=await rows(db,'SELECT content,score,equipment_id FROM v_dashboard_devices ORDER BY equipment_id');
+   const devices=all.slice(0,limit);
+   const {counts,source}=await businessStatistics(env);
+   const scored=all.filter(r=>r.score!==null),average=scored.reduce((sum,r)=>sum+r.score,0)/scored.length;
+   const metrics={total:all.length,high:scored.filter(r=>r.score>0.35).length,warning:scored.filter(r=>r.score>=0.15&&r.score<=0.35).length,unknown:all.length-scored.length,avg_risk:scored.length?Math.round(average*1000)/1000:null};
+   const top=[...all].sort((a,b)=>(a.score===null)-(b.score===null)||(b.score??0)-(a.score??0)||a.equipment_id.localeCompare(b.equipment_id)).slice(0,100);
+   return json({...base,devices:devices.map(r=>JSON.parse(r.content)),all_devices:all.map(r=>JSON.parse(r.content)),computed_at:new Date().toISOString(),top_risk_devices:top.map(r=>JSON.parse(r.content)),counts,metrics,
     analytics:base.analytics||{xgboost:'unavailable',shap:'unavailable',message:'当前输入尚无匹配的模型计算证据；仅展示有依据的规则参考'},
     sync:{...base.sync,...source,database:'cloudflare-d1://'+env.BUSINESS_DATABASE_ID},returned_devices:devices.length,storage_provider:'cloudflare_d1',schema_version:2});
   }
@@ -49,7 +49,14 @@ export async function sqlRead(request,env,user){
   }
   if(path==='/api/analysis/quality'){
    if(start||end)return json({detail:'此质量视图覆盖当前全部采样；不支持时间筛选，不能将全量结果冒充指定时间范围'},400);
-   return json({records:await rows(db,'SELECT * FROM v_equipment_data_quality '+(id?'WHERE equipment_id=? ':'')+'ORDER BY equipment_id LIMIT ?',id?[id,limit]:[limit]),limit,computed_by:'cloudflare_d1_sql'});
+   const qualityRequest=new Request(new URL('/api/data-quality',url));
+   let quality;
+   if(env.BUSINESS_RESULTS){
+    const stub=env.BUSINESS_RESULTS.get(env.BUSINESS_RESULTS.idFromName(env.BUSINESS_DATABASE_ID+'|shared|/api/data-quality'));
+    const {revisions,dependencies}=await import('./data-sync.mjs');const all=await revisions(env),vector=Object.fromEntries(['__source__',...dependencies('/api/data-quality')].map(key=>[key,all[key]||0]));
+    const response=await stub.fetch('https://results.internal/',{method:'POST',body:JSON.stringify({url:qualityRequest.url,user,vector})});if(!response.ok)throw new Error('质量快照暂不可用');quality=await response.json();
+   }else{const response=await sqlRead(qualityRequest,env,user);if(!response.ok)throw new Error('质量计算暂不可用');quality=await response.json()}
+   return json({records:quality.equipment_quality.filter(row=>!id||row.equipment_id===id).sort((a,b)=>a.equipment_id.localeCompare(b.equipment_id)).slice(0,limit),limit,computed_by:'cloudflare_d1_sql',computed_at:quality.computed_at});
   }
   if(path==='/api/analysis/work-orders'){
    const filters=['w.deleted_at IS NULL'],params=[];

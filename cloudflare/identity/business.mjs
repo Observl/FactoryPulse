@@ -1,18 +1,19 @@
 import {modelReplay} from './model-replay.mjs';
 // Cloudflare-only persistence. Raw SQL and database credentials are never public APIs.
 import {workOrders} from './work-orders.mjs';
+import {businessStatistics} from './statistics.mjs';
 export async function business(request,env,user){
  const db=env.BUSINESS_DB,url=new URL(request.url),path=url.pathname;
  const reply=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
  if(!db)return reply({detail:'业务 D1 尚未绑定'},503);
  const work=await workOrders(request,env,user);if(work)return work;
- const settings=Object.fromEntries((await db.prepare('SELECT key,value FROM settings').all()).results.map(r=>[r.key,r.value]));
+ const settings=Object.fromEntries((await db.prepare('SELECT key,value FROM '+(String(env.BUSINESS_SCHEMA_VERSION)==='2'?'business_settings':'settings')).all()).results.map(r=>[r.key,r.value]));
  const version=settings.last_sync_at;
  if(!version)return reply({detail:'测试集尚未完成云端校验'},503);
  const view=async key=>{const row=await db.prepare('SELECT content FROM fp_computed_views WHERE dataset_id=? AND view_key=?').bind(version,key).first();return row?JSON.parse(row.content):null};
  const records=async name=>(await db.prepare('SELECT content FROM records WHERE table_name=? ORDER BY row_index').bind(name).all()).results.map(r=>JSON.parse(r.content));
  if(request.method==='GET'){
-  if(path==='/api/model/replay')return reply(await modelReplay(db,version));
+  if(path==='/api/model/replay')return reply(await modelReplay(db,version,String(env.BUSINESS_SCHEMA_VERSION)==='2'));
   if(path==='/api/overview'){
    const result=await view('overview');if(!result)return reply({detail:'云端模型证据尚未计算完成'},503);
    const states=(await db.prepare('SELECT * FROM alerts WHERE dataset_version=? ORDER BY updated_at').bind(version).all()).results;
@@ -26,7 +27,7 @@ export async function business(request,env,user){
    if(!['equipment','readings','maintenance_rules','maintenance_history','staff','orders','scenarios','demo_risks'].includes(table[1]))return reply({detail:'Unknown table'},404);
    const limit=Number(url.searchParams.get('limit')||500);if(!Number.isInteger(limit)||limit<1||limit>25000)return reply({detail:'limit须在1到25000之间'},400);
    const rows=await db.prepare('SELECT content FROM records WHERE table_name=? ORDER BY row_index LIMIT ?').bind(table[1],limit).all();
-   const total=await db.prepare('SELECT COUNT(*) AS n FROM records WHERE table_name=?').bind(table[1]).first();return reply({records:rows.results.map(r=>JSON.parse(r.content)),total:total.n});
+   const total=String(env.BUSINESS_SCHEMA_VERSION)==='2'?(await businessStatistics(env)).counts[table[1]]:(await db.prepare('SELECT COUNT(*) AS n FROM records WHERE table_name=?').bind(table[1]).first()).n;return reply({records:rows.results.map(r=>JSON.parse(r.content)),total});
   }
   if(path==='/api/sync/status'){const overview=await view('overview');return reply({...overview?.sync,database:'cloudflare-d1://'+env.BUSINESS_DATABASE_ID})}
   if(path==='/api/data-quality'){const result=await view('data-quality');return result?reply(result):reply({detail:'数据质量计算尚未完成'},503)}
@@ -36,7 +37,13 @@ export async function business(request,env,user){
    const rows=(await db.prepare('SELECT * FROM work_orders ORDER BY updated_at DESC').all()).results;
    return reply({records:rows.map(r=>({...JSON.parse(r.content),status:r.status,updated_at:r.updated_at})).filter(r=>!r.deleted_at&&(!url.searchParams.has('dataset_version')||r.dataset_version===url.searchParams.get('dataset_version')))});
   }
-  if(path==='/api/alerts')return reply({records:(await db.prepare('SELECT * FROM alerts ORDER BY updated_at DESC').all()).results});
+  if(path==='/api/alerts'){
+   const filters=[],params=[];for(const key of ['dataset_version','equipment_id','status'])if(url.searchParams.has(key)){filters.push(key+'=?');params.push(url.searchParams.get(key))}
+   const limit=Number(url.searchParams.get('limit')||500);if(!Number.isInteger(limit)||limit<1||limit>5000)return reply({detail:'limit须在1到5000之间'},400);
+   // Keep existing full-list clients compatible; clients opting into limit receive bounded results.
+   const sql='SELECT * FROM alerts'+(filters.length?' WHERE '+filters.join(' AND '):'')+' ORDER BY updated_at DESC,alert_id DESC'+(url.searchParams.has('limit')?' LIMIT ?':'');if(url.searchParams.has('limit'))params.push(limit);
+   return reply({records:(await db.prepare(sql).bind(...params).all()).results});
+  }
   if(path==='/api/audit')return reply({records:(await db.prepare('SELECT * FROM audit_events ORDER BY event_id DESC LIMIT 200').all()).results.map(r=>({...r,content:JSON.parse(r.content)}))});
   if(path==='/api/data/versions')return reply({current_version:version,records:(await db.prepare('SELECT * FROM dataset_versions ORDER BY archived_at DESC LIMIT 100').all()).results.map(r=>({...JSON.parse(r.metadata),version:r.version,archived_at:r.archived_at}))});
   if(path==='/api/model/evaluation'){const data=await view('overview'),s=data?.analytics||{};return reply({status:s.xgboost,model_version:s.model_version,training_rows:s.training_rows||0,positive_labels:s.positive_labels||0,evaluation:s.evaluation||{},message:s.message||''})}

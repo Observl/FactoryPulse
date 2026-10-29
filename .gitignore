@@ -30,3 +30,6 @@ outputs/
 *.db-*
 .secrets/
 .wrangler/
+
+# Generated portable diagnostic weights; regenerate with export-diagnostic-models.py.
+/public/models/

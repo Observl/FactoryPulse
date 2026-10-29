@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {dify,readDify,safeDifyError,sessionToken,conversationId} from './dify.mjs';
+import {dify,readDify,safeDifyError,sessionToken,conversationId,finalAnswer} from './dify.mjs';
 const user={user_id:'10001',version:1,role:'developer'};let stored=null;const configs=new Map();
 const stub={async fetch(url,options){const value=JSON.parse(options.body);stored=configs.get(value.user_id)||null;if(url.endsWith('-get'))return Response.json(stored);if(value.version!==(stored?.version||0))return Response.json({detail:'conflict'},{status:409});stored={...value,api_key:value.api_key||stored?.api_key,version:(stored?.version||0)+1};configs.set(value.user_id,stored);return Response.json({success:true,version:stored.version})}};
 const env={IDENTITY_RUNTIME:{idFromName:n=>n,get:()=>stub}};
@@ -19,3 +19,24 @@ console.log('Dify checks passed: account-isolated configuration, no secret discl
 
 assert.ok(!safeDifyError('provider token=secret-value app-fixture','app-fixture').includes('secret-value'));
 await assert.rejects(readDify(new Response('data: '+JSON.stringify({event:'error',message:'Required input missing'})+'\n\n',{headers:{'Content-Type':'text/event-stream'}})),/Required input missing/);
+assert.equal(finalAnswer('<think>private</think>完工后待验收。'),'完工后待验收。');
+assert.equal(finalAnswer('<THINK>one<think>two</think>three</THINK>正文'),'正文');
+assert.equal(finalAnswer('<think>truncated'),'');
+assert.equal(finalAnswer('private</think>正文'),'');
+assert.equal(finalAnswer('正常回答'),'正常回答');
+assert.equal(finalAnswer('<analysis>private</analysis>正文'),'正文');
+const workflowStream=outputs=>new Response('data: '+JSON.stringify({event:'agent_message',answer:'intermediate must not escape'})+'\n\ndata: '+JSON.stringify({event:'workflow_finished',data:{status:'succeeded',outputs}})+'\n\n',{headers:{'Content-Type':'text/event-stream'}});
+assert.equal((await readDify(workflowStream({final:'<think>hidden</think>最终回答'}),'final')).answer,'最终回答');
+assert.equal((await readDify(workflowStream({result:'wrong field'}),'final')).answer,'');
+assert.equal((await readDify(Response.json({data:{status:'succeeded',outputs:{final:'<think>hidden</think>正文'}}}),'final')).answer,'正文');
+console.log('Final-output checks passed: reasoning filtering, truncated reasoning rejection, exact output selection, intermediate output exclusion.');
+const originalTimer=globalThis.setTimeout;const durations=[];
+globalThis.setTimeout=(callback,duration,...args)=>{durations.push(duration);return originalTimer(callback,duration,...args)};
+const stop=new AbortController();let started;
+const ready=new Promise(resolve=>{started=resolve});
+try{
+ const pending=dify(new Request('https://test.invalid/api/copilot/dify/chat',{method:'POST',body:JSON.stringify({question:'long task'}),signal:stop.signal}),env,user,async(_url,options)=>new Promise((_resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true});started()}));
+ await ready;assert.deepEqual(durations,[],'Dify chat must not install an application deadline');
+ stop.abort();const result=await pending;assert.match((await result.json()).detail,/停止等待/);
+}finally{globalThis.setTimeout=originalTimer}
+console.log('Unlimited server wait check passed: no fixed deadline, caller cancellation preserved.');

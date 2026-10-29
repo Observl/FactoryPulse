@@ -105,3 +105,14 @@ def test_work_order_conflicts_are_computed_in_sql_and_ignore_archives():
     assert row['staff_conflict']==1 and row['equipment_conflict']==0
     db.execute("UPDATE maintenance_work_orders SET details=json_set(details,'$.deleted_at','2026-01-02') WHERE work_order_id='2'")
     assert db.execute('SELECT * FROM v_work_order_conflicts').fetchall()==[]
+
+
+def test_dashboard_preserves_prediction_identity_for_alert_concurrency_guard():
+    db=upgrade(v1())
+    db.execute('INSERT INTO records VALUES(?,?,?)',['readings',0,json.dumps({'reading_id':'R','equipment_id':'E1','timestamp':'2026-01-01T00:00:00Z','failure':0})])
+    prediction='2026-01-01 08:00:00'
+    evidence={'devices':[{'equipment_id':'E1','model_risk':.5,'prediction_at':prediction}]}
+    db.execute('INSERT INTO fp_computed_views VALUES(?,?,?)',['v1','overview',json.dumps(evidence)])
+    device=json.loads(db.execute('SELECT content FROM v_dashboard_devices').fetchone()[0])
+    assert device['prediction_at']==prediction
+    assert device['latest_reading']['timestamp']=='2026-01-01T00:00:00.000Z'

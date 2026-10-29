@@ -177,7 +177,7 @@ def runtime_statements():
   f"CREATE TRIGGER calculation_evidence_update INSTEAD OF UPDATE ON fp_computed_views BEGIN INSERT INTO calculation_history(dataset_id,result_type,input_revision,evidence) VALUES(NEW.dataset_id,NEW.view_key,{stamp},NEW.content); END",
   "CREATE VIEW fp_computed_freshness AS SELECT c.dataset_id,c.result_type AS view_key,c.input_revision FROM calculation_history c JOIN fp_computed_views v ON v.dataset_id=c.dataset_id AND v.view_key=c.result_type AND v.content=c.evidence GROUP BY c.dataset_id,c.result_type,c.input_revision",
   "CREATE VIEW fp_v_processed_results AS SELECT * FROM fp_computed_views WHERE dataset_id=(SELECT value FROM business_settings WHERE key='last_sync_at')",
-  "CREATE VIEW fp_v_record_counts AS SELECT table_name,COUNT(*) AS record_count FROM records GROUP BY table_name",
+  "CREATE VIEW fp_v_record_counts AS SELECT * FROM ("+' UNION ALL '.join(f"SELECT '{name}' AS table_name,COUNT(*) AS record_count FROM {table}" for name,(table,_,_) in list(INPUTS.items())[:4])+") UNION ALL SELECT * FROM ("+' UNION ALL '.join(f"SELECT '{name}' AS table_name,COUNT(*) AS record_count FROM {table}" for name,(table,_,_) in list(INPUTS.items())[4:])+" UNION ALL SELECT 'demo_risks',COUNT(*) FROM equipment e LEFT JOIN v_equipment_rule_risk r USING(equipment_id) LEFT JOIN external_risk_inputs x USING(equipment_id) WHERE COALESCE(x.risk_score,r.rule_risk) IS NOT NULL)",
   "CREATE VIEW fp_v_data_source AS SELECT (SELECT value FROM business_settings WHERE key='last_sync_at') AS dataset_version,(SELECT value FROM business_settings WHERE key='source_name') AS source_name,(SELECT value FROM business_settings WHERE key='source_date') AS source_date,(SELECT COUNT(*) FROM sensor_readings) AS record_count,(SELECT COUNT(*) FROM equipment) AS device_count",
  ]
  resources={table:'records/'+name for name,(table,_,_) in INPUTS.items()}
@@ -196,4 +196,6 @@ def runtime_statements():
  from pathlib import Path
  analysis=Path(__file__).resolve().parents[1]/'deploy/d1-business-v2-analysis.sql'
  s.extend(part.strip() for part in analysis.read_text(encoding='utf-8').split(';') if part.strip())
+ indexes=Path(__file__).resolve().parents[1]/'deploy/d1-read-indexes.sql'
+ s.extend(part.strip() for part in indexes.read_text(encoding='utf-8').split(';') if part.strip())
  return s

@@ -168,3 +168,23 @@ def test_target_ready_only_after_full_readback_verification():
     finally:
         target.db.close()
         broken.db.close()
+
+
+def test_quality_returns_reusable_json_in_one_statement(db):
+    from backend.sql_reports import data_quality
+    db.execute("INSERT INTO equipment(equipment_id) VALUES('E1')")
+    db.execute("INSERT INTO sensor_readings(reading_id,equipment_id,timestamp,motor_current_a,attributes) VALUES('R1','E1','2026-01-01T00:00:00Z',9,?)", (json.dumps({'_feature_fields':['motor_current_a']}),))
+    class Tracked:
+        statements=[]
+        def execute(self,sql):
+            self.statements.append(sql)
+            return db.execute(sql)
+    tracked=Tracked()
+    result=data_quality(tracked)
+    assert len(tracked.statements)==1
+    assert result['reading_count']==1
+    assert result['missing_rate']==0
+    assert result['field_coverage']==['motor_current_a']
+    assert result['equipment_quality'][0]['equipment_id']=='E1'
+    assert result['metric_statistics'][0]['average']==9
+    assert result['sampling_baselines']==[]

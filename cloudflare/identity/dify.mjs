@@ -8,14 +8,25 @@ export async function conversationId(secret,scope,token){
  if(!token)return '';
  try{const [payload,sig,...extra]=token.split('.');if(extra.length||!/^[a-f0-9]{64}$/.test(sig))throw Error();const bytes=Uint8Array.from(sig.match(/../g),x=>parseInt(x,16));if(!await crypto.subtle.verify('HMAC',await signingKey(secret),bytes,new TextEncoder().encode(payload)))throw Error();const value=decode(payload);if(value.scope!==scope||value.expires<Date.now()||typeof value.id!=='string')throw Error();return value.id}catch{throw new Error('会话已过期，请新建对话。')}
 }
-function workflowAnswer(value,field){const outputs=value?.data?.outputs||{};const answer=outputs[field||'answer']??outputs.text??outputs.result;return typeof answer==='string'?answer:''}
+export function finalAnswer(value){
+ if(typeof value!=='string')return '';
+ // Discard tagged reasoning, including nested or truncated blocks. Never expose
+ // a partial reasoning block when the provider stops before its closing tag.
+ let depth=0,cursor=0,clean='';
+ const tags=/<\/?(?:think|thinking|analysis|reasoning)\b[^>]*>/gi;let match;
+ while((match=tags.exec(value))){if(depth===0)clean+=value.slice(cursor,match.index);if(match[0][1]==='/'){if(!depth)return '';depth--}else depth++;cursor=tags.lastIndex}
+ if(!depth)clean+=value.slice(cursor);
+ if(/<\/?(?:think|thinking|analysis|reasoning)\b/i.test(clean))return '';
+ return clean.trim();
+}
+function workflowAnswer(value,field){const outputs=value?.data?.outputs||{};const answer=outputs[field||'answer'];return finalAnswer(answer)}
 export function safeDifyError(value,secret=''){
  let message=typeof value==='string'?value:'工作流运行失败。';
  if(secret)message=message.split(secret).join('[已隐藏]');
  return message.replace(/\b(?:app-|sk-)[a-zA-Z0-9_-]+/g,'[已隐藏]').replace(/Bearer\s+[^\s"']+/gi,'Bearer [已隐藏]').replace(/((?:api[_ -]?key|token|password|secret)["']?\s*[:=]\s*["']?)[^\s,"'}]+/gi,'$1[已隐藏]').slice(0,350);
 }
 export async function readDify(response,field,secret=''){
- if(response.headers.get('Content-Type')?.includes('application/json')){const value=await response.json();return {answer:value.answer||workflowAnswer(value,field),conversation:value.conversation_id||''}}
+ if(response.headers.get('Content-Type')?.includes('application/json')){const value=await response.json();if(value.data?.status&&value.data.status!=='succeeded')throw new Error('Dify：'+safeDifyError(value.data.error,secret));return {answer:field?workflowAnswer(value,field):finalAnswer(value.answer)||workflowAnswer(value,field),conversation:value.conversation_id||''}}
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',answer='',conversation='',ended=false,total=0;
  try{
   while(true){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>4*1024*1024)throw new Error('回答过长，请缩小问题范围。');buffer=(buffer+decoder.decode(value,{stream:true})).replace(/\r\n/g,'\n');let split;
@@ -25,11 +36,11 @@ export async function readDify(response,field,secret=''){
     if(['message','agent_message'].includes(event.event))answer+=event.answer||'';
     if(event.event==='message_replace')answer=event.answer||'';
     if(event.event==='message_end')ended=true;
-    if(event.event==='workflow_finished'){if(event.data?.status!=='succeeded')throw new Error('Dify：'+safeDifyError(event.data?.error,secret));answer=workflowAnswer(event,field)||answer;ended=true}
+    if(event.event==='workflow_finished'){if(event.data?.status!=='succeeded')throw new Error('Dify：'+safeDifyError(event.data?.error,secret));answer=workflowAnswer(event,field);ended=true}
    }
   }
  }finally{await reader.cancel().catch(()=>{});reader.releaseLock()}
- if(!ended)throw new Error('Dify 回答中断，请重试。');return {answer,conversation};
+ if(!ended)throw new Error('Dify 回答中断，请重试。');return {answer:finalAnswer(answer),conversation};
 }
 /** Called only after the site's normal account authentication. */
 export async function dify(request,env,user,fetcher=fetch){
@@ -71,12 +82,12 @@ export async function dify(request,env,user,fetcher=fetch){
  const query=(context?'页面定位信息：'+context+'\n\n':'')+body.question.trim();
  const inputs=mode==='workflow'?{[inputField]:query}:{};
  const payload={inputs,response_mode:'streaming',user:'factorypulse:'+user.user_id,...(mode==='chat'?{query,conversation_id:previous}: {})};
- const controller=new AbortController(),abort=()=>controller.abort();request.signal.addEventListener('abort',abort,{once:true});const timer=setTimeout(abort,120000);
+ const controller=new AbortController(),abort=()=>controller.abort();request.signal.addEventListener('abort',abort,{once:true});if(request.signal.aborted)abort();
  let stage='network';
  try{
   const response=await fetcher(API+(mode==='chat'?'/chat-messages':'/workflows/run'),{method:'POST',headers:{Authorization:'Bearer '+secret,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal,redirect:'follow'});
   if(!response.ok){await response.body?.cancel();return reply({detail:[401,403].includes(response.status)?'Dify API Key 无效或无权访问此应用。':response.status===429?'Dify 请求过多或额度不足，请稍后重试。':'Dify 调用失败，请检查应用类型、输入变量和发布状态。'},502)}
   stage='response';const result=await readDify(response,outputField,secret);if(!result.answer)return reply({detail:'Dify 未返回文本回答，请检查输出变量。'},502);
   return reply({answer:result.answer,session:result.conversation?await sessionToken(secret,scope,result.conversation):'',provider:'dify'});
- }catch(error){return reply({detail:controller.signal.aborted?'Dify 响应超时，请重试。':error.message.startsWith('Dify')||error.message.startsWith('回答过长')?error.message:stage==='response'?'Dify 返回内容无法解析（DIFY_RESPONSE_PARSE）。':'无法连接 Dify 运行接口（DIFY_RUN_NETWORK）。'},502)}finally{clearTimeout(timer);request.signal.removeEventListener('abort',abort)}
+ }catch(error){return reply({detail:controller.signal.aborted?'已停止等待 Dify 回答，后台任务可能仍在运行。':error.message.startsWith('Dify')||error.message.startsWith('回答过长')?error.message:stage==='response'?'Dify 返回内容无法解析（DIFY_RESPONSE_PARSE）。':'无法连接 Dify 运行接口（DIFY_RUN_NETWORK）。'},502)}finally{request.signal.removeEventListener('abort',abort)}
 }

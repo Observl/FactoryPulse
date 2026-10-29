@@ -88,6 +88,7 @@
 .sync-dialog{position:relative;width:min(560px,100%);background:#fff;border-radius:17px;padding:10px}
 .sync-dialog .sync-panel{border:0}
 .sync-dialog .sync-panel.expanded{margin-top:0}
+.sync-cache-controls{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:20px 0}
 .sync-dialog-close{position:absolute;right:18px;top:18px;z-index:2}
 .risk-components{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
 .risk-components>div{display:flex;flex-direction:column;gap:5px;padding:11px 12px;background:#fff8f1;border:1px solid #fee3c9;border-radius:9px}

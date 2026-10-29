@@ -1,3 +1,4 @@
+import {useApiUpdate} from "./useCachedData";
 import {ChartEventLegend} from "./components/ChartEventLegend";
 import {Button} from "./components/Button";
 import {LoadingPanel} from "./LoadingPanel";
@@ -15,6 +16,7 @@ export function RiskEvidence({onOpenWorkOrder}:{onOpenWorkOrder?:(id:string)=>vo
  const [tab,setTab]=useState("评估结果"),[data,setData]=useState<Replay|null>(null),[position,setPosition]=useState(0),[equipmentId,setEquipmentId]=useState(""),[error,setError]=useState("");
  const load=async()=>{try{setError("");const body=await apiRequest("/model/replay");setData(body);setPosition(0);setEquipmentId(body.series[0]?.equipment_id||"")}catch(e){setError(errorMessage(e))}};
  useEffect(()=>{void load()},[]);
+ useApiUpdate(["/model/replay"],(_path,body)=>{setData(body);setPosition(0);setEquipmentId(body.series[0]?.equipment_id||"");setError("")});
  if(error)return <section className="panel"><p role="alert">{error}</p><Button onClick={()=>void load()}>重新加载回放</Button></section>;
  if(!data)return <LoadingPanel title="历史验证" fields={["预警命中率","故障前窗口发现率","正常窗口误报率","F1"]}/>;
  const equipmentIds=[...new Set(data.series.map(point=>point.equipment_id))];const series=data.series.filter(point=>point.equipment_id===equipmentId);const timeline=(data.timeline||[]).filter(event=>event.equipment_id===equipmentId);const ticks=[...new Set([...series.map(point=>new Date(point.timestamp).getTime()),...timeline.map(event=>new Date(event.timestamp).getTime())])].filter(Number.isFinite).sort((a,b)=>a-b);const cursor=ticks[Math.min(position,ticks.length-1)];const observed=series.filter(point=>new Date(point.timestamp).getTime()<=cursor);const current=observed[observed.length-1];const visible=observed.slice(-361).map(point=>({...point,time:new Date(point.timestamp).getTime(),score:point.score*100}));const occurred=timeline.filter(event=>new Date(event.timestamp).getTime()<=cursor);const nextEvent=timeline.find(event=>new Date(event.timestamp).getTime()>cursor);

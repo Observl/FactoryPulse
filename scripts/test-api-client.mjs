@@ -37,4 +37,14 @@ const remoteSource=source.replace('import.meta.env?.VITE_API_BASE_URL','"https:/
 const remoteCompiled=ts.transpileModule(remoteSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const remote=await import('data:text/javascript;base64,'+Buffer.from(withCache(remoteCompiled)).toString('base64'));
 await remote.apiRequest('/auth/status');assert.equal(target,'https://identity.example/api/auth/status');assert.equal(credentials,'include');
+// Unlimited Dify waits must not install a deadline, while Stop still aborts.
+const originalTimer=window.setTimeout;
+window.setTimeout=()=>{throw Error('unexpected deadline for unlimited request')};
+const stop=new AbortController();let started;
+const ready=new Promise(resolve=>{started=resolve});
+globalThis.fetch=async(_url,options)=>new Promise((_resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true});started()});
+const waiting=apiRequest('/copilot/dify/chat',{method:'POST',signal:stop.signal},0);
+await ready;stop.abort();await assert.rejects(waiting,error=>error.name==='AbortError');
+window.setTimeout=originalTimer;
+console.log('Unlimited Dify request check passed: no deadline timer, manual cancellation preserved.');
 console.log('10 API checks passed: failure handling, local routing and credentialed remote routing (mocked transport).');

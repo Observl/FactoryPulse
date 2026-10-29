@@ -1,3 +1,4 @@
+import {useApiUpdate} from "./useCachedData";
 import {Button} from "./components/Button";
 import {EquipmentTimeline} from "./EquipmentTimeline";
 import {useEffect,useRef,useState} from "react";
@@ -24,8 +25,9 @@ export function MaintenanceBoard({dataVersion,scenarioId,focusedWorkOrder="",rev
  const [datasets,setDatasets]=useState<Data["datasets"]>([]),[scenarios,setScenarios]=useState<Data["scenarios"]>([]);
  const versionRef=useRef(scope);versionRef.current=scope;
  const load=async()=>{const requested=scope;const value:Data=await apiRequest(`/maintenance/timeline?dataset_version=${encodeURIComponent(scope)}&include_deleted=true`);if(versionRef.current===requested){setData(value);setDatasets(value.datasets);setScenarios(value.scenarios);setActiveScenario(old=>value.scenarios.some(s=>s.scenario_id===old)?old:value.scenarios[0]?.scenario_id||"")}};
+ useApiUpdate([`/maintenance/timeline?dataset_version=${encodeURIComponent(scope)}&include_deleted=true`],()=>{void load().catch(e=>setError(errorMessage(e)))});
  useEffect(()=>{setScope(dataVersion);setStatus("未关闭")},[dataVersion]);
- useEffect(()=>{setData(null);setError("");let active=true;const refresh=()=>load().catch(e=>{if(active)setError(errorMessage(e))});void refresh();const timer=window.setInterval(()=>void refresh(),30000);return()=>{active=false;window.clearInterval(timer)}},[scope]);
+ useEffect(()=>{setData(null);setError("");let active=true;const refresh=()=>load().catch(e=>{if(active)setError(errorMessage(e))});void refresh();return()=>{active=false;}},[scope]);
  useEffect(()=>{void load().catch(e=>setError(errorMessage(e)))},[revision]);
  useEffect(()=>{if(!focusedWorkOrder)return;let active=true;setStatus("全部");setSelected(focusedWorkOrder);apiRequest(`/work-orders/${encodeURIComponent(focusedWorkOrder)}/flow`).then(value=>{if(active)setScope(value.record.dataset_version||"")}).catch(e=>{if(active)setError(errorMessage(e))});return()=>{active=false}},[focusedWorkOrder]);
  const currentScope=!!data?.current&&data.dataset_version===scope;

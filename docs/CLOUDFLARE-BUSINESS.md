@@ -1,6 +1,6 @@
 # Cloudflare 业务数据
 
-> 2026-10-26：兼容 Worker 与前端已发布线上，版本 `339b5e2a-9149-4d47-be12-fd923400408f`。原地 V2 迁移被 D1 当日读取额度耗尽阻塞，线上业务库仍为 V1；不创建原库备份。真实检查：页面和健康接口 HTTP 200，概览接口 HTTP 503、`D1_READ_QUOTA_EXCEEDED`。现有库使用 [V1 指南](AGENT-DATABASE-GUIDE-V1.md)；[V2 指南](AGENT-DATABASE-GUIDE.md) 在成功迁移前不可用于线上查询。
+> 2026-10-27：业务库已原地迁移为 V2，线上 Worker 已启用 `BUSINESS_SCHEMA_VERSION=2`。24 台设备、34,560 条采样及其他分类数量核对一致，外键无错误，无旧表副本，未创建原库备份。页面、健康与登录状态接口 HTTP 200；真实云库的概览、数据质量、库存和工单 SQL 报告检查通过。当前 Agent 查询使用 [V2 指南](AGENT-DATABASE-GUIDE.md)，[V1 指南](AGENT-DATABASE-GUIDE-V1.md) 仅保留历史参考。
 
 业务库为 `factorypulse_testdata`，ID `abc7cb74-5be4-49a2-827a-3bd8b639f257`。
 账号库仍为 `factorypulse_users`；两库不混用，不向浏览器公开 D1 令牌或通用 SQL 接口。
@@ -10,7 +10,7 @@
 `model-validation-v1-4141a127f218`，合成 CNC 验证数据，共 24 台设备、34,560 条监测采样、34,814 条总记录。
 原始文件 SHA-256 为 `4141a127f218e19c11e3231e8f5c1910fb13426d9b14623fb645c89a9861a947`。
 `scripts/upload-d1-dataset.py` 上传后逐条回读比对，通过后才在 D1 的 `fp_app_settings` 切换默认版本。
-`fp_dataset_records` 保留冻结输入，`records` 是当前业务数据，`fp_computed_views` 是真实 Python 模型计算产生的版本化视图。
+`source_dataset_records` 保留原有冻结输入，当前业务事实位于 equipment、sensor_readings 等清晰表名中。records 为旧接口兼容视图；calculation_history 保留真实模型计算的历史证据，fp_computed_views 为按输入修订筛选的兼容投影。确定性计算由 SQL 动态视图完成。
 
 ## 本地运行
 

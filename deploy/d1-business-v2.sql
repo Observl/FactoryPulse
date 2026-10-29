@@ -107,10 +107,10 @@ CREATE TABLE business_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
 
 -- Readable views contain no persisted counters, totals or current-state caches.
 CREATE VIEW v_equipment_latest_reading AS
- SELECT * FROM (
-  SELECT s.*,ROW_NUMBER() OVER(PARTITION BY equipment_id ORDER BY timestamp DESC,reading_id DESC) AS reading_rank
-  FROM sensor_readings s
- ) WHERE reading_rank=1;
+ SELECT s.*,1 AS reading_rank FROM equipment e JOIN sensor_readings s ON s.reading_id=(
+  SELECT t.reading_id FROM sensor_readings t WHERE t.equipment_id=e.equipment_id
+  ORDER BY t.timestamp DESC,t.reading_id DESC LIMIT 1
+ );
 CREATE VIEW v_equipment_summary AS
  SELECT e.*,r.reading_id,r.timestamp AS latest_sample_at,r.rotational_speed_rpm,
  r.torque_nm,r.vibration_mm_s,r.spindle_load_pct,r.motor_current_a,r.oil_temperature_c,

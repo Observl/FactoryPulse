@@ -39,8 +39,10 @@ def upgrade_statements(objects, source_revision):
         if init and init[1] in reused_targets:continue
         view=re.match(r'CREATE VIEW (\w+)',stripped,re.I)
         trigger=re.match(r'CREATE TRIGGER (\w+).*?INSTEAD OF (INSERT|UPDATE|DELETE) ON (\w+)',stripped,re.I|re.S)
-        index=re.match(r'CREATE (?:UNIQUE )?INDEX \w+ ON (\w+)',stripped,re.I)
-        if index and index[1] in reused_targets:continue
+        index=re.match(r'CREATE (?:UNIQUE )?INDEX (?:IF NOT EXISTS )?\w+ ON (\w+)',stripped,re.I)
+        if index and index[1] in reused_targets:
+            if 'IF NOT EXISTS' in stripped.upper():deferred.append(sql)
+            continue
         if view:
             deferred.append(sql);continue
         if trigger:

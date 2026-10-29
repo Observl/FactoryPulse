@@ -4,8 +4,8 @@
   "compatibility_date": "2026-08-06",
   "workers_dev": true,
   "preview_urls": false,
-  "durable_objects": {"bindings":[{"name":"IDENTITY_RUNTIME","class_name":"IdentityRuntime"}]},
-  "migrations": [{"tag":"identity-runtime-v1","new_sqlite_classes":["IdentityRuntime"]}],
+  "durable_objects": {"bindings":[{"name":"IDENTITY_RUNTIME","class_name":"IdentityRuntime"},{"name":"BUSINESS_RESULTS","class_name":"BusinessResults"}]},
+  "migrations": [{"tag":"identity-runtime-v1","new_sqlite_classes":["IdentityRuntime"]},{"tag":"business-results-v1","new_sqlite_classes":["BusinessResults"]}],
   "assets": {
     "directory": "../dist",
     "binding": "ASSETS",
@@ -13,5 +13,5 @@
     "not_found_handling": "single-page-application"
   },
   "d1_databases": [{"binding":"DB","database_name":"factorypulse_users","database_id":"af5776ef-c7f8-48c7-8f21-1bb36f98061c"},{"binding":"BUSINESS_DB","database_name":"factorypulse_testdata","database_id":"abc7cb74-5be4-49a2-827a-3bd8b639f257"}],
-  "vars": {"BUSINESS_DATABASE_ID":"abc7cb74-5be4-49a2-827a-3bd8b639f257","ALLOWED_ORIGINS":"https://factorypulse.griffonage2077.workers.dev,https://observl.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://localhost:8000"}
+  "vars": {"BUSINESS_SCHEMA_VERSION":"2","BUSINESS_DATABASE_ID":"abc7cb74-5be4-49a2-827a-3bd8b639f257","ALLOWED_ORIGINS":"https://factorypulse.griffonage2077.workers.dev,https://observl.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://localhost:8000"}
 }

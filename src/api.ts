@@ -46,7 +46,8 @@ async function transport(path:string,options:RequestInit={},timeoutMs?:number):P
  const cancel=()=>controller.abort();
  if(options.signal?.aborted)controller.abort();
  options.signal?.addEventListener("abort",cancel,{once:true});
- const timer=window.setTimeout(()=>{timedOut=true;controller.abort()},timeoutMs??(write?90000:30000));
+ // Zero explicitly disables the application deadline; caller cancellation remains active.
+ const timer=timeoutMs===0?undefined:window.setTimeout(()=>{timedOut=true;controller.abort()},timeoutMs??(write?90000:30000));
  try{
   const response=await fetch(apiBase+path,{...options,credentials:"include",cache:options.cache||"no-store",signal:controller.signal});
   const etag=response.headers?.get("ETag")||undefined;

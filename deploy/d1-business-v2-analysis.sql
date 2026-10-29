@@ -1,11 +1,11 @@
 -- Database-side analytics. No AI computation, stored counters or normal-limit claims.
 CREATE VIEW v_reading_metrics AS
  SELECT s.reading_id,s.equipment_id,s.timestamp,f.value AS metric,
- json_extract(json_patch(s.attributes,json_object(
- 'air_temperature_k',s.air_temperature_k,'process_temperature_k',s.process_temperature_k,
- 'rotational_speed_rpm',s.rotational_speed_rpm,'torque_nm',s.torque_nm,'tool_wear_min',s.tool_wear_min,
- 'vibration_mm_s',s.vibration_mm_s,'spindle_load_pct',s.spindle_load_pct,
- 'motor_current_a',s.motor_current_a,'oil_temperature_c',s.oil_temperature_c)), '$.'||f.value) AS value
+ CASE f.value WHEN 'air_temperature_k' THEN s.air_temperature_k WHEN 'process_temperature_k' THEN s.process_temperature_k
+ WHEN 'rotational_speed_rpm' THEN s.rotational_speed_rpm WHEN 'torque_nm' THEN s.torque_nm WHEN 'tool_wear_min' THEN s.tool_wear_min
+ WHEN 'vibration_mm_s' THEN s.vibration_mm_s WHEN 'spindle_load_pct' THEN s.spindle_load_pct
+ WHEN 'motor_current_a' THEN s.motor_current_a WHEN 'oil_temperature_c' THEN s.oil_temperature_c
+ ELSE json_extract(s.attributes,'$.'||f.value) END AS value
  FROM sensor_readings s,json_each(COALESCE(json_extract(s.attributes,'$._feature_fields'),
  '["air_temperature_k","process_temperature_k","rotational_speed_rpm","torque_nm","tool_wear_min","vibration_mm_s","spindle_load_pct","motor_current_a","oil_temperature_c"]')) f;
 CREATE VIEW v_equipment_metric_statistics AS
@@ -124,7 +124,7 @@ CREATE VIEW v_dashboard_devices AS
  'risk_available',json(CASE WHEN score IS NULL THEN 'false' ELSE 'true' END),
  'risk_level',CASE WHEN score IS NULL THEN '待评估' WHEN score>0.35 THEN '高' WHEN score>=0.15 THEN '中' ELSE '低' END,
  'review_required',json(CASE WHEN score>=COALESCE(json_extract(artifact_content,'$.model_alert_threshold'),0.15) THEN 'true' ELSE 'false' END),
- 'prediction_at',timestamp,'prediction_window',CASE WHEN model_risk IS NULL THEN '当前工况参考' ELSE COALESCE(json_extract(artifact_content,'$.prediction_window'),'模型历史证据') END,
+ 'prediction_at',COALESCE(json_extract(artifact_content,'$.prediction_at'),timestamp),'prediction_window',CASE WHEN model_risk IS NULL THEN '当前工况参考' ELSE COALESCE(json_extract(artifact_content,'$.prediction_window'),'模型历史证据') END,
  'risk_semantics',CASE WHEN model_risk IS NOT NULL THEN '模型分数用于检查排序，不是故障概率' WHEN score IS NOT NULL THEN '规则或趋势参考，不继承模型验证成绩' ELSE '没有足够证据评估，不能解读为低风险' END,
  'recommended_action',COALESCE(json_extract(artifact_content,'$.recommended_action'),'复核监测、历史记录与设备手册，再确认检修动作'),
  'primary_evidence',json(COALESCE(json_extract(artifact_content,'$.primary_evidence'),'[]')),

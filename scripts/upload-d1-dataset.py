@@ -21,6 +21,14 @@ def main():
     token = Path(config['token_file'])
     config['token_file'] = str(token if token.is_absolute() else config_path.parent / token)
     store = D1Store(config)
+    if store.batch([{'sql':"SELECT name FROM sqlite_master WHERE name='database_schema'"}])[0]['results']:
+        # Initialization and UPSERT target the physical source archive tables;
+        # SQLite cannot apply ON CONFLICT to the legacy compatibility views.
+        from backend.d1_business import identifiers
+        from backend.database_v2_runtime import AUXILIARY
+        original_batch=store.batch
+        mapping={name:AUXILIARY[name][0] for name in ('fp_datasets','fp_dataset_records','fp_app_settings')}
+        store.batch=lambda statements:original_batch([{**item,'sql':identifiers(item['sql'],mapping)} for item in statements])
     folder = ROOT / 'data/model-validation'
     manifest = json.loads((folder / 'manifest.json').read_text(encoding='utf-8'))
     raw = (folder / 'dataset.json').read_bytes()
