@@ -251,3 +251,7 @@ export async function workOrders(request,env,user){
  if(request.method==='POST'&&!['developer','admin','user'].includes(user.role))return Response.json({detail:'只读账号不能修改工单或资源'},{status:403});
  try{const s=await new State(env.BUSINESS_DB,user).load(request,url,String(env.BUSINESS_SCHEMA_VERSION)==='2');const body=await route(request,s,url);return body===null?Response.json({detail:'工单接口不存在'},{status:404}):Response.json(body,{headers:{'Cache-Control':'no-store'}})}catch(e){if(e instanceof Problem)return Response.json({detail:e.message},{status:e.status});throw e}
 }
+
+
+// Integration seam: exercise the exact production route against a frozen in-memory state.
+export {route as scheduleComparisonRoute};
