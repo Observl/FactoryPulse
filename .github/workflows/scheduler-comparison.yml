@@ -1,0 +1,35 @@
+name: Scheduler comparison
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/analytics.py'
+      - 'backend/field_profiles.py'
+      - 'cloudflare/identity/work-orders.mjs'
+      - 'scripts/compare*'
+      - 'scripts/requirements-scheduler-comparison.txt'
+      - 'tests/fixtures/scheduler-comparison.json'
+      - 'tests/test_scheduler_comparison.py'
+      - '.github/workflows/scheduler-comparison.yml'
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: python -m pip install -r scripts/requirements-scheduler-comparison.txt
+      - run: PYTHONPATH=. python -m pytest --noconftest tests/test_scheduler_comparison.py tests/test_joint_schedule.py -q
+      - run: python scripts/compare_schedulers.py --output artifacts/scheduler-comparison.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scheduler-comparison
+          path: artifacts/scheduler-comparison.json
