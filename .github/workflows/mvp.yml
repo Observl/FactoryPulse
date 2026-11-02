@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
+      - run: node scripts/test-cloudflare-config.mjs
       - run: npm run build
       - run: npm run test:client
       - run: node scripts/test-operational-tasks.mjs

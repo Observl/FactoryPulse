@@ -4,14 +4,86 @@
   "compatibility_date": "2026-08-06",
   "workers_dev": true,
   "preview_urls": false,
-  "durable_objects": {"bindings":[{"name":"IDENTITY_RUNTIME","class_name":"IdentityRuntime"},{"name":"BUSINESS_RESULTS","class_name":"BusinessResults"}]},
-  "migrations": [{"tag":"identity-runtime-v1","new_sqlite_classes":["IdentityRuntime"]},{"tag":"business-results-v1","new_sqlite_classes":["BusinessResults"]}],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "IDENTITY_RUNTIME",
+        "class_name": "IdentityRuntime"
+      },
+      {
+        "name": "BUSINESS_RESULTS",
+        "class_name": "BusinessResults"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "identity-runtime-v1",
+      "new_sqlite_classes": [
+        "IdentityRuntime"
+      ]
+    },
+    {
+      "tag": "business-results-v1",
+      "new_sqlite_classes": [
+        "BusinessResults"
+      ]
+    }
+  ],
   "assets": {
     "directory": "../dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"],
+    "run_worker_first": [
+      "/api/*"
+    ],
     "not_found_handling": "single-page-application"
   },
-  "d1_databases": [{"binding":"DB","database_name":"factorypulse_users","database_id":"af5776ef-c7f8-48c7-8f21-1bb36f98061c"},{"binding":"BUSINESS_DB","database_name":"factorypulse_testdata","database_id":"abc7cb74-5be4-49a2-827a-3bd8b639f257"}],
-  "vars": {"BUSINESS_SCHEMA_VERSION":"2","BUSINESS_DATABASE_ID":"abc7cb74-5be4-49a2-827a-3bd8b639f257","ALLOWED_ORIGINS":"https://factorypulse.griffonage2077.workers.dev,https://observl.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://localhost:8000"}
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "factorypulse_users",
+      "database_id": "af5776ef-c7f8-48c7-8f21-1bb36f98061c"
+    },
+    {
+      "binding": "BUSINESS_DB",
+      "database_name": "factorypulse_testdata",
+      "database_id": "abc7cb74-5be4-49a2-827a-3bd8b639f257"
+    }
+  ],
+  "vars": {
+    "BUSINESS_SCHEMA_VERSION": "2",
+    "BUSINESS_DATABASE_ID": "abc7cb74-5be4-49a2-827a-3bd8b639f257",
+    "ALLOWED_ORIGINS": "https://factorypulse.griffonage2077.workers.dev,https://observl.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://localhost:8000"
+  },
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "fp-acceptance-identity-20261023t025734z-fbb426",
+        "database_id": "dfe033b1-5f3b-4d95-a415-9910bc538831"
+      },
+      {
+        "binding": "BUSINESS_DB",
+        "database_name": "fp-acceptance-business-20261023t025734z-fbb426",
+        "database_id": "b4e446dd-eeea-425a-8ee2-793b3e01e30e"
+      }
+    ],
+    "durable_objects": {
+      "bindings": [
+        {
+          "name": "IDENTITY_RUNTIME",
+          "class_name": "IdentityRuntime"
+        },
+        {
+          "name": "BUSINESS_RESULTS",
+          "class_name": "BusinessResults"
+        }
+      ]
+    },
+    "vars": {
+      "BUSINESS_SCHEMA_VERSION": "2",
+      "BUSINESS_DATABASE_ID": "b4e446dd-eeea-425a-8ee2-793b3e01e30e",
+      "ALLOWED_ORIGINS": "http://127.0.0.1:5173,http://localhost:5173"
+    }
+  }
 }
