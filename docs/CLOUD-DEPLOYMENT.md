@@ -84,3 +84,12 @@ D1 账号及业务数据均由 Cloudflare 导出及 Time Travel 管理；本地�
 6. 先做一次小范围的读写与排程检查，再扩大验收范围。
 
 服务器尚未提供时，可以准备部署包及运行隔离短测，不能宣称完整业务已经上线。当前线上部分接口仍返回 501；接入真实 Python 服务后由该服务处理。
+
+
+## Workers Builds 分支预览
+
+Cloudflare 在仓库根目录执行构建时使用 `wrangler.jsonc`；显式 `--config cloudflare/wrangler.jsonc` 与之等价。生产构建命令为 `npm run build`，生产部署使用 `npx wrangler deploy`，PR 部署使用 `npx wrangler preview`。新版 preview 必须有 `previews` 块，不能用 `preview_urls` 替代。
+
+预览显式绑定现有隔离验收库 `fp-acceptance-identity-20261023t025734z-fbb426` 与 `fp-acceptance-business-20261023t025734z-fbb426`，不使用生产账号/业务库。所有分支预览共享这些验收数据；不得用于互相要求数据隔离的并行写入试验。Durable Object 绑定与变量也在预览块中声明；命令行和 PR 构建不自动复制生产密钥或生产数据。
+
+`node scripts/test-cloudflare-config.mjs` 校验两份配置一致、路径有效及预览库与生产库分离。构建成功只验证打包和部署，不代表预览验收库的数据、迁移和工作流密钥已完成业务验收。

@@ -1,0 +1,1534 @@
+[
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 300,
+    "max_hours": 8,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 3
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "A",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "B",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "C",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "normal",
+    "expected": {
+      "workers": {
+        "task_count": 3,
+        "priority_weight": 18000
+      },
+      "cp_sat": {
+        "task_count": 3,
+        "priority_weight": 18000
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 300,
+    "max_hours": 8,
+    "staff_limit": 1,
+    "stock": {
+      "轴承": 3
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 2,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "A",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "B",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "C",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "staff_tight",
+    "expected": {
+      "workers": {
+        "task_count": 1,
+        "priority_weight": 9000
+      },
+      "cp_sat": {
+        "task_count": 1,
+        "priority_weight": 9000
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 300,
+    "max_hours": 8,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 1
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "A",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "B",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "C",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "spares_short",
+    "expected": {
+      "workers": {
+        "task_count": 1,
+        "priority_weight": 9000
+      },
+      "cp_sat": {
+        "task_count": 1,
+        "priority_weight": 9000
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 300,
+    "max_hours": 8,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 3
+    },
+    "orders": [
+      {
+        "order_id": "O1",
+        "equipment_id": "A",
+        "start_at": "2026-10-20T08:00:00",
+        "end_at": "2026-10-20T16:00:00"
+      }
+    ],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "A",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "B",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "C",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "production_conflict",
+    "expected": {
+      "workers": {
+        "task_count": 2,
+        "priority_weight": 9000
+      },
+      "cp_sat": {
+        "task_count": 2,
+        "priority_weight": 9000
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 100,
+    "max_hours": 8,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 3
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "A",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "B",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "C",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "budget_limit",
+    "expected": {
+      "workers": {
+        "task_count": 1,
+        "priority_weight": 9000
+      },
+      "cp_sat": {
+        "task_count": 1,
+        "priority_weight": 9000
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 300,
+    "max_hours": 8,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 3
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "电气",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "电气",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "A",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "B",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "C",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "no_nonempty_plan",
+    "expected": {
+      "workers": {
+        "task_count": 0,
+        "priority_weight": 0
+      },
+      "cp_sat": {
+        "task_count": 0,
+        "priority_weight": 0
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 300,
+    "max_hours": 8,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 0
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "A",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "B",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "C",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "changed_stock",
+    "expected": {
+      "workers": {
+        "task_count": 0,
+        "priority_weight": 0
+      },
+      "cp_sat": {
+        "task_count": 0,
+        "priority_weight": 0
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 300,
+    "max_hours": 8,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 2
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "A",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "B",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "C",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "changed_stock_replenished",
+    "expected": {
+      "workers": {
+        "task_count": 2,
+        "priority_weight": 15000
+      },
+      "cp_sat": {
+        "task_count": 2,
+        "priority_weight": 15000
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 300,
+    "max_hours": 4,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 3
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "A",
+        "hours": 4,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "B",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "C",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      }
+    ],
+    "name": "joint_selection_tradeoff",
+    "expected": {
+      "workers": {
+        "task_count": 1,
+        "priority_weight": 9000
+      },
+      "cp_sat": {
+        "task_count": 2,
+        "priority_weight": 12000
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 1200,
+    "max_hours": 24,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 12
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "E00",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E01",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E02",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E03",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E04",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E05",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E06",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E07",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E08",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E09",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E10",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E11",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "scale_12",
+    "expected": {
+      "workers": {
+        "task_count": 8,
+        "priority_weight": 60000
+      },
+      "cp_sat": {
+        "task_count": 8,
+        "priority_weight": 60000
+      }
+    }
+  },
+  {
+    "now": "2026-10-20T07:00:00",
+    "start_at": "2026-10-20T08:00:00",
+    "budget": 2400,
+    "max_hours": 48,
+    "staff_limit": 2,
+    "stock": {
+      "轴承": 24
+    },
+    "orders": [],
+    "staff": [
+      {
+        "staff_id": "P0",
+        "staff_name": "P0",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      },
+      {
+        "staff_id": "P1",
+        "staff_name": "P1",
+        "skills": "机修",
+        "available_hours": 8,
+        "shift_start": "2026-10-20T08:00:00",
+        "shift_end": "2026-10-20T16:00:00"
+      }
+    ],
+    "tasks": [
+      {
+        "equipment_id": "E00",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E01",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E02",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E03",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E04",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E05",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E06",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E07",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E08",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E09",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E10",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E11",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E12",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E13",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E14",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E15",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E16",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E17",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E18",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E19",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E20",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      },
+      {
+        "equipment_id": "E21",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "高",
+        "priority_weight": 9000
+      },
+      {
+        "equipment_id": "E22",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "中",
+        "priority_weight": 6000
+      },
+      {
+        "equipment_id": "E23",
+        "hours": 2,
+        "cost": 100,
+        "people": 1,
+        "required_skill": "机修",
+        "window_start": "2026-10-20T08:00:00",
+        "window_end": "2026-10-20T16:00:00",
+        "spare_parts": [
+          {
+            "part_name": "轴承",
+            "quantity": 1
+          }
+        ],
+        "priority": "低",
+        "priority_weight": 3000
+      }
+    ],
+    "name": "scale_24",
+    "expected": {
+      "workers": {
+        "task_count": 8,
+        "priority_weight": 72000
+      },
+      "cp_sat": {
+        "task_count": 8,
+        "priority_weight": 72000
+      }
+    }
+  }
+]
