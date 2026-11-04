@@ -24,7 +24,7 @@ export function WorkOrderPanel({id,onClose,onChanged,onAdjust,onOpenDevice,onSch
  const actionVersion=useRef<number|null>(null);
  const operationId=useRef(crypto.randomUUID());
  useApiUpdate([`/work-orders/${encodeURIComponent(id)}/flow`],(_path,body)=>setFlow(body));
- const load=async()=>{setFlow(await apiRequest(`/work-orders/${encodeURIComponent(id)}/flow`))};
+ const load=async()=>{setFlow(await apiRequest(`/work-orders/${encodeURIComponent(id)}/flow`,{cache:"reload"}))};
  useEffect(()=>{dialog.current?.showModal();let active=true;apiRequest(`/work-orders/${encodeURIComponent(id)}/flow`).then(value=>{if(active)setFlow(value)}).catch(e=>{if(active)setError(errorMessage(e))});return()=>{active=false}},[id]);
  const close=()=>{if(busy||childBusy||!confirmUnsavedNavigation())return;onClose()};
  const refresh=async()=>{await load();await onChanged()};

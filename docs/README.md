@@ -15,3 +15,7 @@
 当前验收与额度状态另见[项目交接](PROJECT-HANDOFF-2026-11-03.md)及[本地验证报告](LOCAL-ACCEPTANCE-2026-11-03.md)。项目介绍以[README](../README.md)和[参赛说明](COMPETITION-BRIEF.md)的当前版本为准。Cloudflare额度限制可能影响评审访问，历史通过记录不证明当前线上可用。
 
 过时研究、旧模块图、V1 指南、重复专题及分散历史 Markdown 的整理备份位于 `outputs/documentation-before-prune-20261102.zip`，不作为当前操作依据。
+
+最新补充：[2026-11-04 低云端消耗验收](LOCAL-ACCEPTANCE-2026-11-04.md)，包含 Worker 本地读取预算与短时导入压力实测。
+
+线上状态：[2026-11-04 工单修复与闭环验收](WORK-ORDER-FIX-ACCEPTANCE-2026-11-04.md)：缓存修复已发布，模拟日期更新，原工单完整验收归档，无重复创建或 Dify 重跑。[修复前记录](ONLINE-ACCEPTANCE-2026-11-04.md)保留追溯。

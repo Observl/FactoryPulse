@@ -69,3 +69,28 @@ assert.equal((await difyCache.request('/copilot/dify/status',{},difyLoader)).rea
 assert.equal(difyReads,3);assert.equal(difyCache.peek('/copilot/dify/config'),undefined);
 console.log('Dify cache regression passed: stale persisted settings excluded, saved version and readiness read fresh.');
 console.log('Persistent JSON checks passed: week-old offline cache and first-visit-only loading.');
+
+// Successful writes invalidate operational snapshots without eagerly reading D1.
+const lifecycle=new ProcessedCache();await lifecycle.authorize('lifecycle');
+let liveOrders=[],reads=[];
+const timeline='/maintenance/timeline?dataset_version=demo&include_deleted=true';
+const lifecycleLoad=async path=>{reads.push(path);return {status:200,data:path===timeline?{work_orders:[...liveOrders]}:{devices:['unchanged']}}};
+await lifecycle.request(timeline,{},lifecycleLoad);const overview=await lifecycle.request('/overview',{},lifecycleLoad);
+reads=[];liveOrders=['WO-existing'];await lifecycle.afterWrite('/alerts/E1/action');
+assert.deepEqual(reads,[]);
+assert.deepEqual((await lifecycle.request(timeline,{},lifecycleLoad)).work_orders,['WO-existing']);
+assert.equal(await lifecycle.request('/overview',{},lifecycleLoad),overview);
+assert.deepEqual(reads,[timeline],'only the requested operational view should reread');
+liveOrders=['WO-existing','external'];await lifecycle.request(timeline,{cache:'reload'},lifecycleLoad);
+assert.deepEqual(lifecycle.peek(timeline).work_orders,liveOrders,'manual reload must bypass the local snapshot');
+// Persisted invalidation must survive a reload.
+await lifecycle.afterWrite('/work-orders/WO-existing/approval');
+const reopened=new ProcessedCache();await reopened.authorize('lifecycle');reads=[];
+await reopened.request(timeline,{},lifecycleLoad);assert.deepEqual(reads,[timeline]);
+// A read started before the mutation cannot restore a stale empty list.
+const racing=new ProcessedCache();await racing.authorize('race');let finishStale,calls=0;
+const raceLoader=async()=>{calls++;if(calls===1)return new Promise(resolve=>{finishStale=resolve});return {status:200,data:{work_orders:['WO-existing']}}};
+const oldRead=racing.request(timeline,{},raceLoader);await racing.afterWrite('/alerts/E1/action');
+const freshRead=racing.request(timeline,{},raceLoader);await freshRead;
+finishStale({status:200,data:{work_orders:[]}});assert.deepEqual((await oldRead).work_orders,['WO-existing']);
+assert.equal(calls,2);console.log('Work-order cache regression passed: lazy invalidation, explicit refresh, persistence, concurrent stale response.');

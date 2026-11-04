@@ -47,7 +47,7 @@ class PersistentResults{
 }
 
 export class ProcessedCache{
- private scope='';private epoch=0;private entries=new Map<string,Entry>();private pending=new Map<string,Promise<any>>();private listeners=new Set<Listener>();
+ private scope='';private epoch=0;private entries=new Map<string,Entry>();private pending=new Map<string,Promise<any>>();private invalidations=new Map<string,number>();private listeners=new Set<Listener>();
  private statuses=new Set<()=>void>();private persistence=new PersistentResults();private loader:Loader|null=null;private checking:Promise<void>|null=null;private revisionsTag='';private resourceVersions:Record<string,number>={};private lastCheck=0;
  private status={enabled:false,checking:false,lastChecked:0,error:'',entries:0};
  subscribe=(listener:Listener)=>{this.listeners.add(listener);return()=>{this.listeners.delete(listener)}};
@@ -63,22 +63,25 @@ export class ProcessedCache{
   this.report({enabled:true,entries:this.entries.size,error:'',lastChecked:0,checking:false});
  }
  async clear(){++this.epoch;this.scope='';this.entries.clear();this.pending.clear();this.revisionsTag='';this.lastCheck=0;this.report({enabled:false,entries:0,error:'',checking:false});await this.persistence.clear()}
- async request(path:string,options:RequestInit,loader:Loader){
+ async request(path:string,options:RequestInit,loader:Loader):Promise<any>{
   if(!this.scope||!allowed.test(path))return (await loader(path)).data;
   this.loader=loader;const cached=this.entries.get(path);
-  if(cached)return cached.data;
+  if(options.cache==='reload'||options.cache==='no-cache')return this.refresh(path,loader);
+  if(cached?.saved)return cached.data;
   return this.refresh(path,loader);
  }
- private async refresh(path:string,loader:Loader,force=false){
+ private async refresh(path:string,loader:Loader,force=false):Promise<any>{
   const key=this.scope+'|'+path;if(this.pending.has(key))return this.pending.get(key)!;
-  const epoch=this.epoch,scope=this.scope,old=this.entries.get(path);
+  const epoch=this.epoch,scope=this.scope,old=this.entries.get(path),generation=this.invalidations.get(path)||0;
   const job=(async()=>{
    let response=await loader(path,!force&&old?.etag?{'If-None-Match':old.etag,'X-FP-Delta-Base':old.etag}:{});
    if(epoch!==this.epoch){if(scope!==this.scope)throw new DOMException('账号已切换','AbortError');return this.entries.get(path)?.data??response.data;}
-   if(response.status===304){if(!old)throw new Error('缓存基线已过期');return old.data}
+   if(generation!==(this.invalidations.get(path)||0))return this.request(path,{},loader);
+   if(response.status===304){if(!old)throw new Error('缓存基线已过期');old.saved=Date.now();void this.persistence.write(scope,old);return old.data}
    let data=response.data;
    if(response.delta){try{if(!old||data?.format!=='fp-delta-v1'||data.base!==old.etag)throw new Error('增量版本不匹配');data=applyDelta(old.data,data.patch)}catch{response=await loader(path,{});if(response.delta||response.status===304)throw new Error('无法重建完整数据');data=response.data}}
    if(epoch!==this.epoch){if(scope!==this.scope)throw new DOMException('账号已切换','AbortError');return this.entries.get(path)?.data??data;}
+   if(generation!==(this.invalidations.get(path)||0))return this.request(path,{},loader);
    data=shareData(old?.data,data);
    // Untagged endpoints also retain their last successful JSON until a manual update.
 
@@ -106,6 +109,17 @@ export class ProcessedCache{
    finally{if(epoch===this.epoch)this.report({checking:false})}
   })().finally(()=>{this.checking=null});this.checking=job;return job;
  }
- async afterWrite(){this.revisionsTag='';this.lastCheck=0}
+ async afterWrite(writePath=''){
+  this.revisionsTag='';this.lastCheck=0;
+  // Invalidate only operational views. No reads here: mounted consumers reload on demand.
+  const path=writePath.split('?')[0];
+  if(!/^\/(?:alerts\/|maintenance-requests$|schedule\/|work-orders\/|resources\/)/.test(path))return;
+  const affected=(read:string)=>/^\/(?:work-orders(?:\/|$)|maintenance\/|operations\/|resources\/|alerts(?:\?|$)|audit(?:\?|$)|equipment\/[^/]+\/(?:operations|history))/.test(read);
+  const paths=new Set([...this.entries.keys(),...Array.from(this.pending.keys(),key=>key.slice(this.scope.length+1))]);
+  await Promise.all([...paths].filter(affected).map(async read=>{
+   this.invalidations.set(read,(this.invalidations.get(read)||0)+1);this.pending.delete(this.scope+'|'+read);
+   const entry=this.entries.get(read);if(entry){entry.saved=0;await this.persistence.write(this.scope,entry)}
+  }));
+ }
 }
 export const processedCache=new ProcessedCache();

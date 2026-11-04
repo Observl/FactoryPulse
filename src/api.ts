@@ -71,6 +71,6 @@ export function errorMessage(error:unknown){return error instanceof Error?error.
 
 export async function apiRequest(path:string,options:RequestInit={},timeoutMs?:number){
  const method=(options.method||"GET").toUpperCase();
- if(method!=="GET"){const result=await transport(path,options,timeoutMs);if(path==="/auth/logout")await processedCache.clear();else if(!path.startsWith("/auth/"))await processedCache.afterWrite();return result.data}
+ if(method!=="GET"){const result=await transport(path,options,timeoutMs);if(path==="/auth/logout")await processedCache.clear();else if(!path.startsWith("/auth/"))await processedCache.afterWrite(path);return result.data}
  return processedCache.request(path,options,(target,extra)=>{const headers=new Headers(options.headers);for(const [key,value] of Object.entries(extra||{}))headers.set(key,value);return transport(target,{...options,headers},timeoutMs)});
 }
